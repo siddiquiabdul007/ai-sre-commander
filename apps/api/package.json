@@ -1,0 +1,34 @@
+{
+  "name": "@ai-sre/api",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/server.js",
+  "types": "./dist/server.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "node dist/server.js",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@ai-sre/agent-verification": "*",
+    "@ai-sre/ai-orchestrator": "*",
+    "@ai-sre/auth": "*",
+    "@ai-sre/compliance-service": "*",
+    "@ai-sre/correlation-engine": "*",
+    "@ai-sre/event-ingestion": "*",
+    "@ai-sre/event-schema": "*",
+    "@ai-sre/evidence-service": "*",
+    "@ai-sre/execution-service": "*",
+    "@ai-sre/incident-engine": "*",
+    "@ai-sre/notification-service": "*",
+    "@ai-sre/policy-engine": "*",
+    "@ai-sre/remediation-engine": "*",
+    "@ai-sre/security": "*",
+    "@ai-sre/telemetry": "*",
+    "fastify": "^5.2.1",
+    "@fastify/cors": "^10.0.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}
