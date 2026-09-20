@@ -1,0 +1,9 @@
+apiVersion: v2
+name: ai-sre-commander
+description: Production-grade AI-powered Incident Detection, Investigation & Remediation Control Plane
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+maintainers:
+  - name: Abdul Ahad Siddiqui
+    email: abdulahadsiddiqui888@gmail.com
