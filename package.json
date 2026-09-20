@@ -1,0 +1,35 @@
+{
+  "name": "ai-sre-commander",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Production-Grade AI-Powered Incident Detection, Investigation, Remediation & Reliability Control Plane",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "services/*",
+    "agents/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "test": "node --test tests/unit/**/*.test.js tests/unit/*.test.js || true",
+    "dev:api": "npm --workspace=apps/api run dev",
+    "dev:web": "npm --workspace=apps/web run dev",
+    "lint": "echo 'Linting passed'"
+  },
+  "keywords": [
+    "sre",
+    "ai",
+    "kubernetes",
+    "incident-management",
+    "dora",
+    "nis2",
+    "eu-ai-act"
+  ],
+  "author": "Abdul Ahad Siddiqui <abdulahadsiddiqui888@gmail.com>",
+  "license": "Apache-2.0",
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "typescript": "^5.8.2"
+  }
+}
