@@ -35,6 +35,13 @@ export class CorrelationEngine {
         const diffMinutes = Math.abs(eventTime - incidentTime) / (1000 * 60);
 
         if (diffMinutes <= this.windowMinutes) {
+          // If a critical or error alert comes in, upgrade severity
+          if (event.severity === 'CRITICAL') {
+            incident.severity = 'SEV-1';
+          } else if (event.severity === 'ERROR' && incident.severity !== 'SEV-1') {
+            incident.severity = 'SEV-2';
+          }
+
           this.incidentRepo.linkEvent(incident.id, event);
           return {
             matchedIncidentId: incident.id,
