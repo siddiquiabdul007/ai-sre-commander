@@ -1,0 +1,19 @@
+{
+  "name": "@ai-sre/verification-service",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@ai-sre/agent-verification": "*",
+    "@ai-sre/event-schema": "*",
+    "@ai-sre/incident-engine": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}

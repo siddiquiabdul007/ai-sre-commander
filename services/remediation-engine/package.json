@@ -1,0 +1,21 @@
+{
+  "name": "@ai-sre/remediation-engine",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@ai-sre/auth": "*",
+    "@ai-sre/event-schema": "*",
+    "@ai-sre/incident-engine": "*",
+    "@ai-sre/policy-engine": "*",
+    "@ai-sre/security": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}

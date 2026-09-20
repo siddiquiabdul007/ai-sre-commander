@@ -1,0 +1,19 @@
+{
+  "name": "@ai-sre/execution-service",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@ai-sre/event-schema": "*",
+    "@ai-sre/incident-engine": "*",
+    "@ai-sre/telemetry": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}
