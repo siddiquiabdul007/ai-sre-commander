@@ -42,7 +42,7 @@ export class ApiServer {
     this.complianceService = new ComplianceService(this.repo);
     this.notificationService = new NotificationService();
 
-    this.setupRoutes();
+    // Routes setup will be awaited in start()
   }
 
   private getUser(req: FastifyRequest): AuthUser {
@@ -339,6 +339,7 @@ export class ApiServer {
   }
 
   public async start(port = 4000): Promise<string> {
+    await this.setupRoutes();
     return this.app.listen({ port, host: '0.0.0.0' });
   }
 
@@ -347,10 +348,12 @@ export class ApiServer {
   }
 }
 
-// Start standalone if executed directly
-if (process.argv[1]?.endsWith('server.js') || process.argv[1]?.endsWith('server.ts')) {
-  const srv = new ApiServer();
-  srv.start(4000).then((addr) => {
-    console.log(`[AI SRE Commander] API Gateway running on ${addr}`);
-  });
-}
+// Start server
+const srv = new ApiServer();
+const port = Number(process.env.PORT) || 4000;
+srv.start(port).then((addr) => {
+  console.log(`[AI SRE Commander] API Gateway running on ${addr}`);
+}).catch((err) => {
+  console.error('[AI SRE Commander] Server failed to start:', err);
+});
+
