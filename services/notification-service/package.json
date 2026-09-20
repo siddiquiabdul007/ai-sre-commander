@@ -1,0 +1,17 @@
+{
+  "name": "@ai-sre/notification-service",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@ai-sre/event-schema": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.2"
+  }
+}
