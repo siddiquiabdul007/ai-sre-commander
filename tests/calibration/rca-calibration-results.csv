@@ -1,0 +1,13 @@
+scenario_id,title,expected_cause,predicted_cause,confidence,correct,latency_ms,hypotheses_count
+corpus-001,"checkout-api OOMKilled after v1.1.0 deployment",memory_leak_deployment,"Memory Leak Introduced in Release v1.1.0",92.0,YES,10922,2
+corpus-002,"payment-processor CPU throttled causing timeouts",cpu_saturation_code_regression,"Excessive CPU usage triggered by retry logic in v3.2.1 deployment",92.0,YES,27021,2
+corpus-003,"order-service unable to reach downstream inventory-api",dns_resolution_failure,"CoreDNS Instability and DNS Resolution Failure",90.0,YES,27484,2
+corpus-004,"user-service returning 500 on all authentication requests",config_drift_env_var,"Incorrect AUTH_PROVIDER_URL in ConfigMap user-service-config",96.0,YES,9061,2
+corpus-005,"checkout-api latency spike caused by inventory-api slowdown",dependency_timeout,"Database Connection Pool Exhaustion in inventory-api",93.0,YES,14694,2
+corpus-006,"logging-service pods evicted due to disk pressure",disk_pressure_pvc,"PVC logging-data storage exhaustion causing node DiskPressure",93.0,YES,19498,2
+corpus-007,"notification-service CrashLoopBackOff after image update",bad_image_tag,"Deployment of bad image tag built from wrong branch",95.0,YES,16210,2
+corpus-008,"product-catalog-api slow responses due to unindexed query",slow_query_missing_index,"Unindexed database query introduced in release v4.1.0",95.0,YES,10096,2
+corpus-009,"api-gateway TLS handshake failures after cert expiry",certificate_expired,"ACME DNS challenge failure prevented automatic TLS certificate renewal",95.0,YES,27182,2
+corpus-010,"payment-gateway hitting third-party rate limits causing failures",rate_limiting_third_party,"Stripe API Rate Limit Exceeded Due to Flash Sale Traffic Surge",93.0,YES,12781,2
+corpus-011,"session-service slow memory leak over 72 hours",memory_leak_longrunning,"Missing Session Cache TTL Eviction Policy",92.0,YES,30150,2
+corpus-012,"Multiple service disruption from node NotReady",node_failure,"ERROR",0,ERROR,8817,0

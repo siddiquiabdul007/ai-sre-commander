@@ -1,0 +1,11 @@
+RCA Calibration Summary — 2026-09-21T00:19:59.834Z
+Model: gemini-3.6-flash (LLM_MODE=live)
+Total scenarios: 12
+Correct: 11
+Incorrect: 0
+Errors: 1
+Accuracy: 100.0%
+Avg confidence (all): 85.5%
+Avg confidence (correct): 93.3%
+Avg confidence (incorrect): N/A%
+Confidence gap: N/A%
