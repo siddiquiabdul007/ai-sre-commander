@@ -9,6 +9,7 @@
     "dev": "tsc --watch"
   },
   "dependencies": {
+    "jose": "^6.2.12",
     "zod": "^3.24.2"
   },
   "devDependencies": {
