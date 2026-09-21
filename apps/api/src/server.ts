@@ -54,8 +54,15 @@ export class ApiServer {
   private async setupRoutes() {
     await this.app.register(cors, { origin: '*' });
 
-    // Health
-    this.app.get('/health', async () => ({ status: 'UP', platform: 'AI SRE Commander v1.0' }));
+    // Health & System Status
+    this.app.get('/health', async () => ({
+      status: 'UP',
+      platform: 'AI SRE Commander v2.0',
+      database: process.env.DATABASE_URL ? 'CONNECTED' : 'IN_MEMORY',
+      k8sMode: process.env.K8S_MODE || 'offline',
+      llmMode: process.env.LLM_MODE || 'offline',
+      timestamp: new Date().toISOString()
+    }));
 
     // Golden Signals & Telemetry
     this.app.get('/api/telemetry', async () => {

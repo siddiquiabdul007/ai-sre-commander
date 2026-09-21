@@ -15,6 +15,7 @@
     "@ai-sre/auth": "*",
     "@ai-sre/compliance-service": "*",
     "@ai-sre/correlation-engine": "*",
+    "@ai-sre/database": "*",
     "@ai-sre/event-ingestion": "*",
     "@ai-sre/event-schema": "*",
     "@ai-sre/evidence-service": "*",

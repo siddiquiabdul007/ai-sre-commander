@@ -1,0 +1,91 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Incident {
+  id          String   @id @default(uuid())
+  tenantId    String
+  title       String
+  severity    String   // SEV1, SEV2, SEV3
+  service     String
+  environment String
+  cluster     String
+  namespace   String
+  state       String   // DETECTED, TRIAGED, INVESTIGATING, etc.
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  timeline    TimelineEntry[]
+  evidence    EvidenceRecord[]
+  proposals   RemediationRecord[]
+
+  @@index([tenantId, service])
+  @@index([state])
+}
+
+model TimelineEntry {
+  id          String   @id @default(uuid())
+  incidentId  String
+  incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  type        String
+  title       String
+  description String
+  data        Json?
+  timestamp   DateTime @default(now())
+
+  @@index([incidentId])
+}
+
+model EvidenceRecord {
+  id              String   @id @default(uuid())
+  incidentId      String
+  incident        Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  type            String
+  source          String
+  title           String
+  summary         String
+  confidence      Float
+  isContradictory Boolean  @default(false)
+  provenance      Json?
+  data            Json?
+  createdAt       DateTime @default(now())
+
+  @@index([incidentId])
+}
+
+model RemediationRecord {
+  id             String   @id @default(uuid())
+  incidentId     String
+  incident       Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  action         String
+  targetResource String
+  parameters     Json?
+  riskAssessment Json?
+  status         String   // PENDING_APPROVAL, APPROVED, EXECUTING, SUCCESS, FAILED
+  idempotencyKey String   @unique // PRD §18: Hard DB-level uniqueness constraint
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([incidentId])
+  @@index([idempotencyKey])
+}
+
+model AuditRecord {
+  id             String   @id @default(uuid())
+  timestamp      DateTime @default(now())
+  tenant         String
+  actor          String
+  action         String
+  targetResource String
+  payloadHash    String
+  previousHash   String
+  hash           String
+  metadata       Json?
+
+  @@index([tenant, timestamp])
+}
