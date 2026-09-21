@@ -53,7 +53,7 @@ interface RoutingConfig {
   ratePer1kOutput: number;
 }
 
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 4;
 
 export class LLMGateway {
   private telemetry = TelemetryCollector.getInstance();
@@ -89,15 +89,15 @@ export class LLMGateway {
     switch (task) {
       case 'classification':
       case 'log_summarization':
-        return { provider: 'Google', model: 'gemini-3.6-flash', ratePer1kInput: 0.00015, ratePer1kOutput: 0.0006 };
+        return { provider: 'Google', model: 'gemini-3.8-flash', ratePer1kInput: 0.00015, ratePer1kOutput: 0.0006 };
       case 'rca':
       case 'remediation_planning':
       case 'code_analysis':
-        return { provider: 'Google', model: 'gemini-3.6-flash', ratePer1kInput: 0.00015, ratePer1kOutput: 0.0006 };
+        return { provider: 'Google', model: 'gemini-3.8-flash', ratePer1kInput: 0.00015, ratePer1kOutput: 0.0006 };
       case 'postmortem':
-        return { provider: 'Google', model: 'gemini-3.6-flash', ratePer1kInput: 0.00015, ratePer1kOutput: 0.0006 };
+        return { provider: 'Google', model: 'gemini-3.8-flash', ratePer1kInput: 0.00015, ratePer1kOutput: 0.0006 };
       default:
-        return { provider: 'Google', model: 'gemini-3.6-flash', ratePer1kInput: 0.00015, ratePer1kOutput: 0.0006 };
+        return { provider: 'Google', model: 'gemini-3.8-flash', ratePer1kInput: 0.00015, ratePer1kOutput: 0.0006 };
     }
   }
 
@@ -137,11 +137,14 @@ export class LLMGateway {
     let lastError: Error | null = null;
     let rawResponseText = '';
 
+    const candidateModels = [config.model, 'gemini-3.5-flash-lite', 'gemini-3.8-flash'];
+
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      const activeModel = candidateModels[(attempt - 1) % candidateModels.length];
       try {
         // Build model config with optional response schema
         const modelConfig: any = {
-          model: config.model,
+          model: activeModel,
         };
 
         // If schema provided, configure for JSON output
@@ -220,10 +223,12 @@ export class LLMGateway {
         );
 
         if (attempt < MAX_RETRIES) {
-          // Add repair instruction on retry
-          request.prompt += `\n\n[RETRY ${attempt}] Previous response was invalid: ${error.message}. Please provide a valid JSON response matching the required schema exactly.`;
-          // Brief delay before retry
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          const isCapacityOrNetwork = error.message?.includes('503') || error.message?.includes('429') || error.message?.includes('fetch failed');
+          if (!isCapacityOrNetwork) {
+            request.prompt += `\n\n[RETRY ${attempt}] Previous response was invalid: ${error.message}. Please provide a valid JSON response matching the required schema exactly.`;
+          }
+          const delayMs = isCapacityOrNetwork ? (2000 * Math.pow(2, attempt - 1)) : (1000 * attempt);
+          await new Promise(resolve => setTimeout(resolve, delayMs));
         }
       }
     }
