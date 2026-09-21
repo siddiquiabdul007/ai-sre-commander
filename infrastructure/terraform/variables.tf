@@ -12,20 +12,20 @@ variable "environment" {
 
 variable "location" {
   type        = string
-  description = "Azure European Region for DORA/NIS2/data residency compliance"
-  default     = "westeurope"
+  description = "Azure Region (centralindia allowed by student subscription policy)"
+  default     = "centralindia"
 }
 
 variable "aks_vm_size" {
   type        = string
-  description = "VM SKU for AKS worker nodes (Standard_B2s fits within Azure student quotas)"
-  default     = "Standard_B2s"
+  description = "VM SKU for AKS worker nodes (Standard_B2s_v2 available in centralindia under student quota)"
+  default     = "Standard_B2s_v2"
 }
 
 variable "aks_node_count" {
   type        = number
   description = "Number of worker nodes in default node pool"
-  default     = 2
+  default     = 1
 }
 
 variable "postgres_sku" {

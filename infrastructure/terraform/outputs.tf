@@ -22,3 +22,21 @@ output "storage_account_name" {
   value       = azurerm_storage_account.sa.name
   description = "Storage account holding immutable audit evidence"
 }
+
+output "postgres_fqdn" {
+  value       = azurerm_postgresql_flexible_server.pg.fqdn
+  description = "PostgreSQL Flexible Server FQDN"
+}
+
+output "postgres_database_url" {
+  value       = "postgresql://sreadmin:SreCmd!${random_string.suffix.result}2026@${azurerm_postgresql_flexible_server.pg.fqdn}:5432/sre_commander?sslmode=require"
+  description = "Full PostgreSQL connection string"
+  sensitive   = true
+}
+
+
+output "aks_kube_config" {
+  value       = azurerm_kubernetes_cluster.aks.kube_config_raw
+  description = "AKS kubeconfig for kubectl access"
+  sensitive   = true
+}

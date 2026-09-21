@@ -134,3 +134,61 @@ resource "azurerm_storage_container" "audit_evidence" {
   storage_account_name  = azurerm_storage_account.sa.name
   container_access_type = "private"
 }
+
+# 8. Subnet for PostgreSQL Flexible Server (delegated)
+resource "azurerm_subnet" "postgres_subnet" {
+  name                 = "snet-postgres"
+  resource_group_name  = azurerm_resource_group.sre_rg.name
+  virtual_network_name = azurerm_virtual_network.sre_vnet.name
+  address_prefixes     = ["10.100.2.0/24"]
+  service_endpoints    = ["Microsoft.Storage"]
+
+  delegation {
+    name = "postgres-delegation"
+    service_delegation {
+      name = "Microsoft.DBforPostgreSQL/flexibleServers"
+      actions = [
+        "Microsoft.Network/virtualNetworks/subnets/join/action"
+      ]
+    }
+  }
+}
+
+# 9. Azure Database for PostgreSQL Flexible Server (PRD v2.0 §3.3)
+resource "azurerm_postgresql_flexible_server" "pg" {
+  name                   = "pg-${var.prefix}-${var.environment}-${random_string.suffix.result}"
+  resource_group_name    = azurerm_resource_group.sre_rg.name
+  location               = azurerm_resource_group.sre_rg.location
+  version                = "16"
+  administrator_login    = "sreadmin"
+  administrator_password = "SreCmd!${random_string.suffix.result}2026"
+  storage_mb             = 32768
+  sku_name               = var.postgres_sku
+  backup_retention_days  = 7
+  public_network_access_enabled = true
+
+  tags = azurerm_resource_group.sre_rg.tags
+}
+
+resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_all" {
+  name             = "allow-all"
+  server_id        = azurerm_postgresql_flexible_server.pg.id
+  start_ip_address = "0.0.0.0"
+  end_ip_address   = "255.255.255.255"
+}
+
+resource "azurerm_postgresql_flexible_server_database" "sre_db" {
+  name      = "sre_commander"
+  server_id = azurerm_postgresql_flexible_server.pg.id
+  collation = "en_US.utf8"
+  charset   = "utf8"
+}
+
+# 12. Attach ACR to AKS (allow AKS to pull images)
+resource "azurerm_role_assignment" "aks_acr_pull" {
+  principal_id                     = azurerm_kubernetes_cluster.aks.kubelet_identity[0].object_id
+  role_definition_name             = "AcrPull"
+  scope                            = azurerm_container_registry.acr.id
+  skip_service_principal_aad_check = true
+}
+
