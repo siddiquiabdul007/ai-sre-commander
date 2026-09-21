@@ -10,7 +10,8 @@
   },
   "dependencies": {
     "@ai-sre/event-schema": "*",
-    "@ai-sre/security": "*"
+    "@ai-sre/security": "*",
+    "@kubernetes/client-node": "^2.0.0"
   },
   "devDependencies": {
     "typescript": "^5.8.2"

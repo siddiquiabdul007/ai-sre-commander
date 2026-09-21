@@ -11,7 +11,8 @@
   "dependencies": {
     "@ai-sre/event-schema": "*",
     "@ai-sre/incident-engine": "*",
-    "@ai-sre/telemetry": "*"
+    "@ai-sre/telemetry": "*",
+    "@kubernetes/client-node": "^2.0.0"
   },
   "devDependencies": {
     "typescript": "^5.8.2"
