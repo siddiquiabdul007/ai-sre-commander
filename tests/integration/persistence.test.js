@@ -8,7 +8,7 @@
  * - Evidence and Timeline persisted durably
  * 
  * Run:
- *   DATABASE_URL="postgresql://sreadmin:SreCmd!1iem4s2026@pg-aisre-prod-1iem4s.postgres.database.azure.com:5432/sre_commander?sslmode=require" node tests/integration/persistence.test.js
+ *   DATABASE_URL="postgresql://sreadmin:<password>@<host>:5432/sre_commander?sslmode=require" node tests/integration/persistence.test.js
  */
 
 import { PrismaIncidentRepository, getPrismaClient } from '@ai-sre/database';

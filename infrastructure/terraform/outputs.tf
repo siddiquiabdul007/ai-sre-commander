@@ -29,7 +29,7 @@ output "postgres_fqdn" {
 }
 
 output "postgres_database_url" {
-  value       = "postgresql://sreadmin:SreCmd!${random_string.suffix.result}2026@${azurerm_postgresql_flexible_server.pg.fqdn}:5432/sre_commander?sslmode=require"
+  value       = "postgresql://sreadmin:${random_password.pg_admin.result}@${azurerm_postgresql_flexible_server.pg.fqdn}:5432/sre_commander?sslmode=require"
   description = "Full PostgreSQL connection string"
   sensitive   = true
 }

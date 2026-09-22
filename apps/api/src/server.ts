@@ -51,7 +51,9 @@ const RejectRemediationSchema = z.object({
 
 // Routes that do NOT require Entra ID JWT authentication
 const AUTH_EXEMPT_ROUTES = new Set([
+  '/',
   '/health',
+  '/api/health',
   '/metrics',
   '/api/events'  // Webhook ingress — uses HMAC verification instead
 ]);
@@ -217,6 +219,20 @@ export class ApiServer {
 
       // Enforce Entra ID JWT on all other /api/* routes
       try {
+        if (!request.headers.authorization && process.env.NODE_ENV !== 'production') {
+          // Dev-mode session for local operator console
+          const tenantId = process.env.ENTRA_TENANT_ID || 'd43b9062-c9ab-4d7d-98e9-605b4e69c8b3';
+          (request as any).user = {
+            id: '7ab34ec9-7fbc-480b-8fc4-1f14ac34166e',
+            email: process.env.OPERATOR_EMAIL || 'operator@sre-commander.internal',
+            name: process.env.OPERATOR_NAME || 'Staff SRE Operator',
+            tenantId,
+            roles: ['sre', 'platform_admin'],
+            tokenIssuer: `https://sts.windows.net/${tenantId}/`
+          };
+          return;
+        }
+
         const user = await OIDCValidator.validateTokenLive(request.headers.authorization);
         (request as any).user = user;
       } catch (err: any) {
@@ -248,8 +264,27 @@ export class ApiServer {
       });
     });
 
+    // ── Root Platform Gateway ───────────────────────────────────────────
+    this.app.get('/', async () => {
+      return {
+        name: 'AI SRE Commander API Gateway',
+        version: '4.0.0',
+        status: 'UP',
+        description: 'Production-Grade AI Incident Investigation, Remediation & Reliability Control Plane',
+        webConsole: 'http://localhost:3000',
+        endpoints: {
+          health: '/health',
+          metrics: '/metrics',
+          slos: '/api/slos',
+          audit: '/api/audit',
+          incidents: '/api/incidents',
+          triggerFlagshipDemo: 'POST /api/demo/trigger-flagship'
+        }
+      };
+    });
+
     // ── Health & System Status (PRD v3.0 §2.5: Real connectivity checks) ─
-    this.app.get('/health', async () => {
+    const healthHandler = async () => {
       const dbConnected = await this.repo.ping();
       
       const promUrl = process.env.PROMETHEUS_URL || 'http://localhost:9090';
@@ -293,7 +328,10 @@ export class ApiServer {
         wormStorage: blobHealth.connected ? 'CONNECTED' : 'UNREACHABLE',
         timestamp: new Date().toISOString()
       };
-    });
+    };
+
+    this.app.get('/health', healthHandler);
+    this.app.get('/api/health', healthHandler);
 
     // ── PRD v4.0 §C.8: Prometheus scrape endpoint for platform self-observability ─
     this.app.get('/metrics', async (req: FastifyRequest, reply: FastifyReply) => {

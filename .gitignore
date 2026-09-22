@@ -14,11 +14,17 @@ build/
 
 # Environment and Secrets
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
 *.pem
 *.key
 *.crt
+*.pfx
+*.p12
+*.tfvars
+*.tfvars.json
+secrets/
+credentials/
 
 # Logs
 logs/
