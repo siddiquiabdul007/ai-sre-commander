@@ -109,7 +109,7 @@ describe('PRD §26.1 & §38 Flagship Demonstration Scenario: 20-Step Golden Inci
     const sreUser = {
       id: 'usr_sre_01',
       email: 'sre-lead@enterprise.eu',
-      name: 'Alex Rivera (Staff SRE)',
+      name: 'Azure SRE Lead',
       tenantId: 'tenant-eu-default',
       roles: ['sre'],
       tokenIssuer: 'https://login.microsoftonline.com/entra-id'

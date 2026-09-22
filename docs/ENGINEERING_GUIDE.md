@@ -186,7 +186,7 @@ Every production incident follows a deterministic, 10-stage operational lifecycl
      - `MEDIUM` (Deployment rollback in non-critical service): Requires single SRE approval + justification.
      - `HIGH/CRITICAL` (Database mutation, cluster drain): Requires dual-SRE sign-off + change freeze bypass.
 8. **Human Approval & Attestation**:
-   - An authorized operator (Alex Rivera, Staff SRE) reviews the proposal on the SRE Control Console.
+   - An authorized operator (Staff SRE / Platform Admin authenticated via Entra ID) reviews the proposal on the SRE Control Console.
    - Operator submits signed justification via Entra ID authenticated JWT.
 9. **Sandboxed K8s Execution & Recovery Verification**:
    - `ExecutionService` validates the UUIDv4 idempotency key in PostgreSQL to prevent duplicate execution.

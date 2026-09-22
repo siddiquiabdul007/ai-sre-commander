@@ -3,6 +3,7 @@ import Fastify, { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { randomUUID, createHmac, timingSafeEqual } from 'node:crypto';
+import { execSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
 
@@ -55,6 +56,7 @@ const AUTH_EXEMPT_ROUTES = new Set([
   '/health',
   '/api/health',
   '/metrics',
+  '/api/me',
   '/api/events'  // Webhook ingress — uses HMAC verification instead
 ]);
 
@@ -86,12 +88,66 @@ export class ApiServer {
     this.notificationService = new NotificationService();
   }
 
+  private static cachedOperator: AuthUser | null = null;
+
+  public static resolveAzureOperator(): AuthUser {
+    if (ApiServer.cachedOperator) return ApiServer.cachedOperator;
+
+    let detectedName = process.env.OPERATOR_NAME;
+    let detectedEmail = process.env.OPERATOR_EMAIL;
+    let detectedId = 'azure-authenticated-operator';
+    const tenantId = process.env.ENTRA_TENANT_ID || 'd43b9062-c9ab-4d7d-98e9-605b4e69c8b3';
+
+    if (!detectedName || !detectedEmail) {
+      try {
+        const userJson = execSync('az ad signed-in-user show -o json', {
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'ignore'],
+          timeout: 4000
+        });
+        const parsed = JSON.parse(userJson);
+        if (parsed.displayName) detectedName = parsed.displayName;
+        if (parsed.userPrincipalName) detectedEmail = parsed.userPrincipalName.split('#')[0];
+        if (parsed.id) detectedId = parsed.id;
+      } catch {
+        try {
+          const accJson = execSync('az account show -o json', {
+            encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'ignore'],
+            timeout: 3000
+          });
+          const acc = JSON.parse(accJson);
+          if (acc.user?.name) {
+            detectedEmail = acc.user.name;
+            detectedName = acc.user.name.split('@')[0];
+          }
+        } catch {
+          // Fallback if az CLI is offline
+        }
+      }
+    }
+
+    ApiServer.cachedOperator = {
+      id: detectedId,
+      name: detectedName || 'Azure SRE Operator',
+      email: detectedEmail || 'operator@azure.internal',
+      tenantId,
+      roles: ['sre', 'platform_admin'],
+      tokenIssuer: `https://sts.windows.net/${tenantId}/`
+    };
+
+    return ApiServer.cachedOperator;
+  }
+
   private async getUser(req: FastifyRequest): Promise<AuthUser> {
-    // Use pre-validated user from onRequest hook if available
     if ((req as any).user) return (req as any).user;
     const authHeader = req.headers.authorization;
+    if (!authHeader && process.env.NODE_ENV !== 'production') {
+      return ApiServer.resolveAzureOperator();
+    }
     return OIDCValidator.validateTokenLive(authHeader);
   }
+
 
   /**
    * Verify HMAC-SHA256 signature on webhook payloads (PRD v4.0 §B.1)
@@ -220,16 +276,8 @@ export class ApiServer {
       // Enforce Entra ID JWT on all other /api/* routes
       try {
         if (!request.headers.authorization && process.env.NODE_ENV !== 'production') {
-          // Dev-mode session for local operator console
-          const tenantId = process.env.ENTRA_TENANT_ID || 'd43b9062-c9ab-4d7d-98e9-605b4e69c8b3';
-          (request as any).user = {
-            id: '7ab34ec9-7fbc-480b-8fc4-1f14ac34166e',
-            email: process.env.OPERATOR_EMAIL || 'operator@sre-commander.internal',
-            name: process.env.OPERATOR_NAME || 'Staff SRE Operator',
-            tenantId,
-            roles: ['sre', 'platform_admin'],
-            tokenIssuer: `https://sts.windows.net/${tenantId}/`
-          };
+          // Dev-mode session for local operator console pulling live Azure account
+          (request as any).user = ApiServer.resolveAzureOperator();
           return;
         }
 
@@ -281,6 +329,11 @@ export class ApiServer {
           triggerFlagshipDemo: 'POST /api/demo/trigger-flagship'
         }
       };
+    });
+
+    // ── Current Authenticated Operator Identity (Real Azure Account) ──
+    this.app.get('/api/me', async (req: FastifyRequest) => {
+      return (req as any).user || ApiServer.resolveAzureOperator();
     });
 
     // ── Health & System Status (PRD v3.0 §2.5: Real connectivity checks) ─

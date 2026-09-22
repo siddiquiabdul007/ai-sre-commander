@@ -80,7 +80,7 @@ flowchart TD
         HYP --> POLICY{Policy Engine}
         POLICY -->|Low Risk| AUTO[Automated Action]
         POLICY -->|Medium/High Risk| GATE[Human SRE Approval Gate]
-        GATE -->|Entra ID RS256 JWT| AUTH_USER[Operator Alex Rivera]
+        GATE -->|Entra ID RS256 JWT| AUTH_USER[Authenticated SRE Operator]
     end
 
     subgraph Execution ["5. Execution & Live Verification"]
@@ -160,7 +160,7 @@ The web console (`http://localhost:3000`) provides an interactive command center
 │ 📄 Audit      │    State: DETECTED ➔ AI Confidence: 94% ➔ Action: ROLLBACK             │
 │ ⚙ Settings    │                                                                        │
 ├───────────────┤  [ Run Flagship Golden Demo ]                     [ Refresh Feeds ]   │
-│ Alex Rivera   │                                                                        │
+│ Authenticated │                                                                        │
 │ Staff SRE     │                                                                        │
 └───────────────┴────────────────────────────────────────────────────────────────────────┘
 ```

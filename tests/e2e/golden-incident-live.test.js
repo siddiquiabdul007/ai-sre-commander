@@ -294,8 +294,8 @@ async function runGoldenIncidentLive() {
   const tenantId = process.env.AZURE_TENANT_ID || 'd43b9062-c9ab-4d7d-98e9-605b4e69c8b3';
   const sreJwt = await new SignJWT({
     oid: 'usr-sre-lead-01',
-    preferred_username: 'alex.rivera@enterprise.eu',
-    name: 'Alex Rivera (Staff SRE Lead)',
+    preferred_username: 'operator@enterprise.eu',
+    name: 'Azure SRE Lead',
     tid: tenantId,
     roles: ['SRE-Lead', 'Platform-Admin']
   })

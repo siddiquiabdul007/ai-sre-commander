@@ -79,6 +79,23 @@ export default function App() {
   const [executionBanner, setExecutionBanner] = useState<string | null>(null);
   const [incidentSearch, setIncidentSearch] = useState<string>('');
   const [severityFilter, setSeverityFilter] = useState<string>('ALL');
+  const [currentUser, setCurrentUser] = useState<{ id: string; name: string; email: string; roles: string[] }>({
+    id: '',
+    name: 'Loading...',
+    email: '',
+    roles: ['sre']
+  });
+
+  const fetchCurrentUser = () => {
+    fetch('/api/me')
+      .then(res => res.ok ? res.json() : null)
+      .then(user => {
+        if (user && user.name) {
+          setCurrentUser(user);
+        }
+      })
+      .catch(() => {});
+  };
 
   const fetchHealth = () => {
     fetch('/api/health')
@@ -149,6 +166,7 @@ export default function App() {
   };
 
   useEffect(() => {
+    fetchCurrentUser();
     fetchHealth();
     fetchIncidents();
     fetchAuditTrail();
@@ -231,6 +249,7 @@ export default function App() {
 
   // Refresh all live data feeds
   const handleRefresh = () => {
+    fetchCurrentUser();
     fetchHealth();
     fetchIncidents(true);
     fetchAuditTrail();
@@ -320,11 +339,18 @@ export default function App() {
         <div className="p-3 border-t border-slate-800 bg-[#0B0F19]/60">
           <div className="flex items-center space-x-2.5">
             <div className="w-7 h-7 rounded-full bg-blue-600/30 border border-blue-500/40 flex items-center justify-center text-xs font-bold text-blue-300">
-              AR
+              {currentUser.name
+                .split(' ')
+                .map(n => n[0])
+                .slice(0, 2)
+                .join('')
+                .toUpperCase() || 'AZ'}
             </div>
             <div className="truncate">
-              <p className="text-xs font-semibold text-slate-200 truncate">Alex Rivera</p>
-              <p className="text-[10px] text-blue-400 font-mono">Role: Staff SRE (Entra ID)</p>
+              <p className="text-xs font-semibold text-slate-200 truncate">{currentUser.name}</p>
+              <p className="text-[10px] text-blue-400 font-mono">
+                Role: {currentUser.roles?.includes('platform_admin') ? 'Platform Admin (Entra ID)' : 'Staff SRE (Entra ID)'}
+              </p>
             </div>
           </div>
         </div>
@@ -1592,6 +1618,14 @@ export default function App() {
                 <div className="p-3 rounded bg-[#0B0F19] border border-slate-800 space-y-1">
                   <p className="text-slate-500">Entra ID Tenant ID</p>
                   <p className="text-white">d43b9062-c9ab-4d7d-98e9-605b4e69c8b3</p>
+                </div>
+                <div className="p-3 rounded bg-[#0B0F19] border border-slate-800 space-y-1">
+                  <p className="text-slate-500">Authenticated Operator</p>
+                  <p className="text-emerald-400 font-semibold">{currentUser.name}</p>
+                </div>
+                <div className="p-3 rounded bg-[#0B0F19] border border-slate-800 space-y-1">
+                  <p className="text-slate-500">Operator Email & Roles</p>
+                  <p className="text-white">{currentUser.email || 'operator@azure.internal'} ({currentUser.roles?.join(', ') || 'sre'})</p>
                 </div>
               </div>
             </div>
