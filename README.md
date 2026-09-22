@@ -16,7 +16,7 @@
 **Autonomous Incident Investigation, Remediation & Reliability Control Plane for Cloud-Native Infrastructure**  
 *Built for European Enterprise SaaS, Fintech, and Mission-Critical Workloads on Microsoft Azure & Kubernetes.*
 
-[Architecture](#2-system-architecture--workflow) • [EU Compliance](#3-eu-regulatory-governance--compliance-targeting) • [Tech Stack](#4-technology-stack) • [Control Console UI](#5-sre-control-console-ui) • [Security](#6-production-hardened-security-architecture) • [Getting Started](#7-getting-started--local-verification)
+[Engineering Guide](docs/ENGINEERING_GUIDE.md) • [Architecture](#2-system-architecture--workflow) • [EU Compliance](#3-eu-regulatory-governance--compliance-targeting) • [Tech Stack](#4-technology-stack) • [Control Console UI](#5-sre-control-console-ui) • [Security](#6-production-hardened-security-architecture) • [Getting Started](#7-getting-started--local-verification)
 
 </div>
 
