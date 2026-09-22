@@ -13,6 +13,7 @@
  *   K8S_MODE=offline node tests/integration/k8s-execution.test.js
  */
 
+import 'dotenv/config';
 import { KubernetesAgent } from '@ai-sre/agent-kubernetes';
 import { ExecutionService } from '@ai-sre/execution-service';
 import { IncidentRepository } from '@ai-sre/incident-engine';

@@ -167,22 +167,44 @@ The web console (`http://localhost:3000`) provides an interactive command center
 
 ### The 10 Interactive Control Room Panels
 
-1. **Overview**: Real-time status cards for all 6 external adapters (AKS, PostgreSQL, Prometheus, WORM Blob, Entra ID, Gemini), platform health, active incident counters, and one-click Flagship Demo trigger.
-2. **Incidents**: Complete catalog of all incidents stored in PostgreSQL with filtering by severity (`SEV-1`, `SEV-2`, `SEV-3`) and state. Clicking **Inspect** opens the 10-tab workspace:
-   - *AI RCA Findings*: Competing hypotheses ranked with confidence percentages and model metadata.
-   - *Evidence Vault*: Grounded logs, metrics, container exit codes, and Git commit metadata.
-   - *Timeline*: Correlated chronological milestones from deployment to resolution.
-   - *Remediation Gate*: Proposal parameters, expected blast radius, justification input, and live execution buttons.
-   - *Topology*: SVG-rendered interactive service dependency graph.
-   - *Audit*: Cryptographic ledger view filtered for the active incident.
-3. **Services**: Service catalog showing `checkout-api` (AKS `sre-demo`), replica status, and live SLO health.
-4. **Infrastructure**: Live cluster matrix, connection pool states, reader/executor Service Account scopes, and Prometheus scrape intervals.
-5. **SLOs**: Real-time Service Level Objectives (Availability 99.94%, Latency p95 99.12%, HTTP Error Rate 99.86%), remaining error budgets, and burn rate indicators.
-6. **Investigations**: Multi-agent causal investigations across all incidents with reasoning outputs and evidence ratios.
-7. **Remediations**: Action proposal log with Idempotency Keys, risk levels (`LOW`, `MEDIUM`, `HIGH`), and status tracking (`PROPOSED`, `APPROVED`, `EXECUTED`).
-8. **Policies**: Active PolicyEngine rules, command allowlists (`kubectl rollout undo` permitted; `delete`/`drop` strictly blocked), NIS2 posture, and EU AI Act Article registry.
-9. **Audit**: Full cryptographic audit ledger with current SHA-256 hashes, previous hashes, actor attribution, and 100% integrity validation badge.
-10. **Settings**: Runtime configuration, cluster endpoints, Entra ID tenant ID, and operator role bindings.
+#### 1. Overview Dashboard
+![Control Room Overview](docs/01_Control_Room_Overview.png)
+*Real-time status cards for all 6 external adapters (Azure AKS, Azure PostgreSQL, Prometheus in-cluster, Azure Blob WORM, Microsoft Entra ID, and Google Gemini), platform health indicators, active incident counters, live SRE operator identity, and one-click Flagship Demo trigger.*
+
+#### 2. Incidents Catalog & Multi-Severity Triage
+![Incidents Catalog](docs/02_Incidents_Catalog.png)
+*Complete catalog of all incidents stored in PostgreSQL with filtering by severity (`SEV-1`, `SEV-2`, `SEV-3`) and state transitions (`DETECTED` ➔ `TRIAGING` ➔ `REMEDIATING` ➔ `RESOLVED`). Clicking **Inspect** opens the 10-tab deep-dive investigation workspace.*
+
+#### 3. Production Service Catalog
+![Service Catalog](docs/03_Service_Catalog.png)
+*Service catalog displaying managed workloads (`checkout-api` on AKS in namespace `sre-demo`), replica availability, image version tags, and live SLO health adherence.*
+
+#### 4. Infrastructure & Cluster Health Matrix
+![Infrastructure Health](docs/04_Infrastructure_Health.png)
+*Live cluster matrix detailing node status, CPU and memory utilization, pod lifecycle phases, PostgreSQL connection pools, and scoped ServiceAccount RBAC permissions.*
+
+#### 5. SLOs & Error Budget Burn Rates
+![SLOs and Error Budgets](docs/05_SLOs_Error_Budgets.png)
+*Real-time Service Level Objectives (Availability 99.94%, Latency p95 99.12%, HTTP Error Rate 99.86%), remaining error budget percentages, and burn rate indicators calculated directly from Prometheus metrics.*
+
+#### 6. AI RCA Multi-Agent Investigations
+![AI RCA Investigations](docs/06_AI_RCA_Investigations.png)
+*Multi-agent causal investigations powered by Google Gemini 3.8 Flash, featuring ranked competing hypotheses, confidence calibration percentages (94%), supporting telemetry evidence, and contradictory proof checks.*
+
+#### 7. Remediation Proposals & Execution Log
+![Remediation Proposals](docs/07_Remediation_Proposals.png)
+*Typed action proposal log with UUIDv4 idempotency keys, blast radius risk tiers (`LOW`, `MEDIUM`, `HIGH`), human-in-the-loop approval triggers, and real-time execution tracking (`PROPOSED`, `APPROVED`, `EXECUTED`).*
+
+#### 8. Policy Engine & EU Regulatory Governance
+![Policy Engine and EU Governance](docs/08_Policy_Engine_EU_Governance.png)
+*Active deterministic PolicyEngine rules, command allowlists (`kubectl rollout undo` permitted; destructive actions blocked), DORA Article 19 status, NIS2 24-hour notification posture, and EU AI Act Article 71 registry metrics.*
+
+#### 9. Cryptographic Tamper-Evident Audit Ledger
+![Cryptographic Audit Ledger](docs/09_Cryptographic_Audit_Ledger.png)
+*Unbroken SHA-256 Merkle hash chain recording every platform event, operator authorization, and AI prompt with cryptographic proof verification and legal immutability hold (WORM).*
+
+#### 10. Settings & Runtime Configuration
+*Runtime cluster configuration, API Gateway endpoints, Microsoft Entra ID tenant validation, and operator role bindings.*
 
 ---
 
@@ -347,6 +369,54 @@ The entire control plane has been verified end-to-end against live infrastructur
 | **Prometheus Live** | In-Cluster PromQL Queries | Passed | 4 / 4 | ~0.8s |
 | **K8s Execution** | Scoped ServiceAccount Rollback | Passed | 4 / 4 | ~1.9s |
 | **Flagship Golden E2E** | 20-Step Live Disaster & Recovery | Passed | 20 / 20 | ~12.2s |
+
+### Empirical Verification & Operational Proofs
+
+The operational integrity of AI SRE Commander has been validated across real cloud infrastructure, regulatory reporting modules, and end-to-end failure drills:
+
+#### 1. Live AKS Cluster Rollout & Pod Recovery Proof
+![Live AKS Cluster Proof](docs/10_Live_AKS_Cluster_Proof.png)
+*Live terminal output demonstrating Azure Kubernetes Service deployment rollout history on `checkout-api` (`v1.0.0` ➔ `v1.1.0` ➔ rollback to `v1.0.0`) and running pod states on `aks-aisre-prod` in `centralindia`.*
+
+#### 2. Platform Health & Live Metric Telemetry
+![Platform Health SLO Metrics](docs/11_Platform_Health_SLO_Metrics.png)
+*Real-time terminal telemetry stream showing continuous Golden Signals, HTTP error rates, container memory working set bytes, and SLO metric calculations.*
+
+#### 3. In-Cluster Prometheus PromQL Query Detail
+![Platform Health Metrics Detail](docs/12_Platform_Health_Metrics_Detail.png)
+*Raw PromQL metric execution against the in-cluster Prometheus server verifying real-time error rate spikes and latency distributions during incident progression.*
+
+#### 4. Azure PostgreSQL Incident Persistence & Audit Records
+![PostgreSQL Incidents and Audit Proof](docs/13_PostgreSQL_Incidents_Audit_Proof.png)
+*Direct SQL query verification from Azure Database for PostgreSQL Flexible Server, demonstrating ACID-compliant persistence of incident states, event timelines, and operator audit entries.*
+
+#### 5. NIS2 Article 23 & EU AI Act Article 71 Compliance Output
+![NIS2 and EU AI Act Compliance](docs/14_NIS2_EU_AI_Act_Compliance_Reports.png)
+*Automated generation of mandatory regulatory reports: NIS2 24-hour early warning notifications and EU AI Act high-risk AI system incident logs with cryptographic verification hashes.*
+
+#### 6. DORA Article 19 Major ICT Incident Report Detail
+![DORA Compliance Report Detail](docs/15_DORA_Compliance_Report_Detail.png)
+*Complete structured DORA regulatory report including incident classification, economic impact assessment, affected financial services, root cause determination, and remediation timeline.*
+
+#### 7. Comprehensive Automated Test Suite Execution
+![Test Suite Execution Overview](docs/16_Test_Suite_Execution_Overview.png)
+*Full test runner execution verifying unit tests, integration tests, security guardrails, and compliance modules with 100% pass rates across all workspaces.*
+
+#### 8. Security Hardening & Adversarial Test Verification
+![Security Integration Test Verification](docs/17_Security_Integration_Test_Verification.png)
+*Automated verification of prompt injection sanitizers, secret redaction filters, rate limiters, and CORS security headers against malicious payloads.*
+
+#### 9. Microsoft Entra ID OIDC Discovery & RS256 JWKS Verification
+![Entra ID JWKS Verification](docs/18_Entra_ID_JWKS_RS256_Verification.png)
+*Live test verifying dynamic cryptographic discovery and signature validation of 6 active RSA public keys from Microsoft Entra ID tenant endpoint.*
+
+#### 10. Kubernetes Integration Guardrail Diagnostic
+![K8s Integration Guardrail Diagnostic](docs/19_K8s_Integration_Guardrail_Diagnostic.png)
+*Diagnostic test demonstrating fail-safe behavior: the control plane strictly refuses unverified fallbacks when scoped ServiceAccount tokens are missing, adhering to zero-trust principles.*
+
+#### 11. Flagship 20-Step Live Golden Incident End-to-End Proof
+![Flagship 20-Step Live Golden Incident](docs/20_Flagship_20_Step_Live_Golden_Incident.png)
+*The crowning validation: automated live execution of the full 20-step incident lifecycle on real Azure AKS — from synthetic failure injection and Gemini RCA to operator approval, live K8s rollback, and WORM audit commitment.*
 
 ---
 
