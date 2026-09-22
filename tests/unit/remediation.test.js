@@ -108,10 +108,12 @@ describe('Remediation, Policy Engine, Execution & Verification Tests', () => {
 
   it('executes approved action with idempotency protection and verifies recovery', async () => {
     const repo = new IncidentRepository();
+    const namespace = process.env.K8S_NAMESPACE || 'sre-demo';
     const inc = repo.createIncident({
       title: 'Checkout API CrashLoop',
       service: 'checkout-api',
-      severity: 'SEV-1'
+      severity: 'SEV-1',
+      namespace
     });
 
     // Advance to REMEDIATION_PROPOSED
@@ -126,9 +128,9 @@ describe('Remediation, Policy Engine, Execution & Verification Tests', () => {
       action: 'rollback_deployment',
       risk: 'HIGH',
       environment: 'production',
-      namespace: 'payments',
+      namespace,
       targetResource: 'deployment/checkout-api',
-      parameters: { deployment: 'checkout-api', targetRevision: 26 },
+      parameters: { deployment: 'checkout-api', targetRevision: 1, namespace },
       expectedImpact: 'Revert to revision 26',
       blastRadius: 'checkout-api only',
       status: 'APPROVED',

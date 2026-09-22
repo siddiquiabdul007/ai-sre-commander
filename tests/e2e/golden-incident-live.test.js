@@ -44,51 +44,52 @@ async function runGoldenIncidentLive() {
   console.log('╚════════════════════════════════════════════════════════════════════════╝\n');
 
   // -------------------------------------------------------------------------
-  // PHASE 0: Pre-Flight Environment & Adapter Readiness Checks
+  // PHASE 0: Pre-Flight Environment & Real Dependency Health Checks
   // -------------------------------------------------------------------------
-  console.log('=== [PHASE 0] Pre-Flight Checks: Real Adapters ===');
+  console.log('=== [PHASE 0] Pre-Flight Checks: Real Infrastructure Dependencies ===');
 
-  // 1. LLM Mode check
-  const llmMode = process.env.LLM_MODE;
-  console.log(`[Adapter 1/5] LLM_MODE = ${llmMode}`);
-  if (llmMode !== 'live' || !process.env.GEMINI_API_KEY) {
-    throw new Error('REJECTED: Test requires LLM_MODE=live and GEMINI_API_KEY. Mocks forbidden.');
+  // 1. Google Gemini API
+  const apiKey = process.env.GEMINI_API_KEY;
+  console.log(`[Adapter 1/5] Gemini API: ${apiKey ? 'KEY CONFIGURED' : 'MISSING'}`);
+  if (!apiKey) {
+    throw new Error('REJECTED: Test requires GEMINI_API_KEY pointing to Google Generative AI.');
   }
 
-  // 2. K8s Mode check
-  const k8sMode = process.env.K8S_MODE;
+  // 2. AKS Kubernetes Cluster
   const namespace = process.env.K8S_NAMESPACE || 'sre-demo';
-  console.log(`[Adapter 2/5] K8S_MODE = ${k8sMode}, namespace = ${namespace}`);
-  if (k8sMode !== 'live') {
-    throw new Error('REJECTED: Test requires K8S_MODE=live. Mocks forbidden.');
-  }
+  console.log(`[Adapter 2/5] Kubernetes Namespace: ${namespace}`);
 
-  // 3. PostgreSQL Database check
+  // 3. Azure PostgreSQL Database check
   const dbUrl = process.env.DATABASE_URL;
-  console.log(`[Adapter 3/5] DATABASE_URL = ${dbUrl ? dbUrl.replace(/:[^:@]+@/, ':****@') : 'NOT_SET'}`);
+  console.log(`[Adapter 3/5] DATABASE_URL: ${dbUrl ? dbUrl.replace(/:[^:@]+@/, ':****@') : 'NOT_SET'}`);
   if (!dbUrl) {
     throw new Error('REJECTED: Test requires DATABASE_URL pointing to live PostgreSQL.');
   }
 
-  // 4. Prometheus check
+  // 4. In-Cluster Prometheus check
   const promUrl = process.env.PROMETHEUS_URL || 'http://localhost:9090';
-  console.log(`[Adapter 4/5] PROMETHEUS_URL = ${promUrl}`);
+  console.log(`[Adapter 4/5] PROMETHEUS_URL: ${promUrl}`);
   const promClient = new PrometheusClient({ baseUrl: promUrl });
   const promHealthy = await promClient.isHealthy();
   console.log(`  Prometheus status: ${promHealthy ? 'HEALTHY (connected)' : 'UNREACHABLE'}`);
   assert.ok(promHealthy, 'Prometheus endpoint must be reachable and healthy');
 
-  // 5. Auth Mode check
-  const authMode = process.env.AUTH_MODE;
-  console.log(`[Adapter 5/5] AUTH_MODE = ${authMode}`);
+  // 5. Microsoft Entra ID JWKS check
+  const jwksHealth = await OIDCValidator.checkJwksHealth();
+  console.log(`[Adapter 5/5] Microsoft Entra ID JWKS: ${jwksHealth.healthy ? 'ACTIVE' : 'UNREACHABLE'} (${jwksHealth.keyCount} keys)`);
+  assert.ok(jwksHealth.healthy, 'Entra ID JWKS endpoint must be live and reachable');
 
-  console.log('✓ All 5 real adapters verified active.\n');
+  console.log('✓ All 5 real infrastructure dependencies verified active.\n');
 
   // -------------------------------------------------------------------------
   // Initialize Core Control Plane Services
   // -------------------------------------------------------------------------
   const prisma = getPrismaClient();
   const dbRepo = new PrismaIncidentRepository(prisma);
+
+  const dbHealthy = await dbRepo.ping();
+  assert.ok(dbHealthy, 'Azure PostgreSQL connection test must pass');
+
   const memoryRepo = new IncidentRepository();
   const correlation = new CorrelationEngine(memoryRepo, 30);
   const orchestrator = new AIOrchestrator(memoryRepo);
@@ -100,7 +101,7 @@ async function runGoldenIncidentLive() {
   const complianceService = new ComplianceService(memoryRepo);
   const notificationService = new NotificationService();
   const k8sAgent = new KubernetesAgent();
-  const obsAgent = new ObservabilityAgent({ mode: 'live', prometheusUrl: promUrl });
+  const obsAgent = new ObservabilityAgent({ prometheusUrl: promUrl });
 
   // -------------------------------------------------------------------------
   // STEP 1 & 2: Baseline Established
@@ -135,7 +136,7 @@ async function runGoldenIncidentLive() {
     repository: { name: 'checkout-api' },
     head_commit: { message: 'feat(payments): add in-memory order buffer caching layer' }
   });
-  const cDeploy = correlation.correlate(faultyDeploy);
+  const cDeploy = await correlation.correlate(faultyDeploy);
   const incidentId = cDeploy.incident.id;
   console.log(`[Step 3] Faulty deployment correlated -> Incident ${incidentId} opened`);
 
@@ -145,7 +146,7 @@ async function runGoldenIncidentLive() {
     involvedObject: { kind: 'Pod', name: 'checkout-api-7b9d9c-f12', labels: { app: 'checkout-api' } },
     message: 'Container limit 512Mi exceeded with exit code 137'
   });
-  const cK8s = correlation.correlate(k8sEvent);
+  const cK8s = await correlation.correlate(k8sEvent);
   assert.equal(cK8s.matchedIncidentId, incidentId);
   console.log(`[Steps 4-5] K8s OOMKilled correlated into incident ${incidentId}`);
 
@@ -154,7 +155,7 @@ async function runGoldenIncidentLive() {
     labels: { alertname: 'HighErrorRate5xx', service: 'checkout-api', severity: 'critical' },
     annotations: { summary: 'HTTP 500 error rate spiked to 6.8%' }
   });
-  const cAlert = correlation.correlate(promAlert);
+  const cAlert = await correlation.correlate(promAlert);
   assert.equal(cAlert.matchedIncidentId, incidentId);
   console.log(`[Steps 6-7] Prometheus HighErrorRate5xx correlated into incident ${incidentId}`);
 
@@ -290,14 +291,16 @@ async function runGoldenIncidentLive() {
 
   // Step 15: Real RS256 JWT Signed for Staff SRE Lead
   const { publicKey, privateKey } = await generateKeyPair('RS256', { modulusLength: 2048 });
+  const tenantId = process.env.AZURE_TENANT_ID || 'd43b9062-c9ab-4d7d-98e9-605b4e69c8b3';
   const sreJwt = await new SignJWT({
     oid: 'usr-sre-lead-01',
     preferred_username: 'alex.rivera@enterprise.eu',
     name: 'Alex Rivera (Staff SRE Lead)',
-    tid: 'tenant-eu-default',
+    tid: tenantId,
     roles: ['SRE-Lead', 'Platform-Admin']
   })
     .setProtectedHeader({ alg: 'RS256' })
+    .setIssuer(`https://login.microsoftonline.com/${tenantId}/v2.0`)
     .setIssuedAt()
     .setAudience('ai-sre-commander')
     .setExpirationTime('1h')
@@ -306,8 +309,8 @@ async function runGoldenIncidentLive() {
   // Validate the token cryptographically
   const verifiedUser = await OIDCValidator.validateTokenLive(`Bearer ${sreJwt}`, {
     clientId: 'ai-sre-commander',
-    getKey: async () => publicKey,
-    mode: 'live'
+    tenantId,
+    getKey: async () => publicKey
   });
   console.log(`[Step 15] Cryptographic RS256 JWT validated for: ${verifiedUser.name} [Roles: ${verifiedUser.roles.join(', ')}]`);
   assert.ok(verifiedUser.roles.includes('sre'), 'Verified actor must have SRE role');
@@ -316,16 +319,16 @@ async function runGoldenIncidentLive() {
   remediationProposal.approvedBy = verifiedUser.email;
   remediationProposal.approvedAt = new Date().toISOString();
 
-  // Audit approval in PostgreSQL
-  await dbRepo.recordAuditEntry({
+  // Audit approval via ComplianceService (persists to DB & Azure Blob WORM)
+  complianceService.recordAuditEvent({
     tenant: verifiedUser.tenantId,
     actor: verifiedUser.email,
+    actorType: 'USER',
     action: 'remediation:approve',
-    targetResource: remediationProposal.targetResource,
-    payloadHash: 'hash-approval-001',
-    previousHash: 'hash-pre-000',
-    hash: 'hash-audit-appr-123',
-    metadata: { proposalId: remediationProposal.id, reason: 'Approved after RCA confirmed bad order buffer cache' }
+    target: remediationProposal.targetResource,
+    requestId: randomUUID(),
+    incidentId: dbIncident.id,
+    policyDecision: { riskClass: 'HIGH', allowed: true }
   });
   console.log(`  Approval & Auth phase: ${Date.now() - tAuth}ms\n`);
 
@@ -335,10 +338,13 @@ async function runGoldenIncidentLive() {
   console.log('=== [STEPS 16-18] Real Kubernetes Execution against AKS & Verification ===');
   const tExec = Date.now();
 
-  // Transition incident to EXECUTING in PostgreSQL
+  // Transition incident through valid PRD §19 lifecycle in PostgreSQL
+  await dbRepo.transitionState(dbIncident.id, 'INVESTIGATING', 'Multi-agent investigation commenced');
+  await dbRepo.transitionState(dbIncident.id, 'DIAGNOSED', 'Gemini LLM identified causal hypothesis');
+  await dbRepo.transitionState(dbIncident.id, 'REMEDIATION_PROPOSED', 'Remediation action proposed');
+  await dbRepo.transitionState(dbIncident.id, 'AWAITING_APPROVAL', 'Awaiting operator sign-off');
   await dbRepo.transitionState(dbIncident.id, 'EXECUTING', 'Remediation rollback executing on AKS');
 
-  // Execute remediation on live AKS cluster
   // Ensure incident exists in memoryRepo in state AWAITING_APPROVAL
   memoryRepo.transitionState(incidentId, 'INVESTIGATING');
   memoryRepo.transitionState(incidentId, 'DIAGNOSED');
@@ -369,6 +375,9 @@ async function runGoldenIncidentLive() {
   });
   console.log(`[Step 17] Live AKS verification: ${postRollbackPods.length} pod(s) healthy after rollback`);
 
+  // Step 17b: Transition to VERIFYING in PostgreSQL
+  await dbRepo.transitionState(dbIncident.id, 'VERIFYING', 'Action executed; verifying recovery on AKS');
+
   // Step 18: Transition to RESOLVED in PostgreSQL
   const resolved = await dbRepo.transitionState(dbIncident.id, 'RESOLVED', 'Rollback to v1.0.0 completed and verified');
   console.log(`[Step 18] Incident resolved: state=${resolved.state}`);
@@ -388,15 +397,14 @@ async function runGoldenIncidentLive() {
   assert.ok(postmortem.correctiveActions.length >= 2);
 
   // Step 20: Audit record
-  await dbRepo.recordAuditEntry({
+  complianceService.recordAuditEvent({
     tenant: 'tenant-eu-default',
     actor: 'ai-sre-commander',
+    actorType: 'SYSTEM',
     action: 'incident:resolved',
-    targetResource: `incident/${dbIncident.id}`,
-    payloadHash: 'hash-resolve-001',
-    previousHash: 'hash-audit-appr-123',
-    hash: 'hash-audit-res-456',
-    metadata: { postmortemId: postmortem.incidentId, totalDurationMs: Date.now() - globalStart }
+    target: `incident/${dbIncident.id}`,
+    requestId: randomUUID(),
+    incidentId: dbIncident.id
   });
 
   const auditValid = complianceService.verifyAuditIntegrity();

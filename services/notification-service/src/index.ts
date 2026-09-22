@@ -11,6 +11,36 @@ export interface NotificationPayload {
 
 export class NotificationService {
   private dispatchHistory: NotificationPayload[] = [];
+  private webhookUrl = process.env.SLACK_WEBHOOK_URL;
+
+  private async dispatch(payload: NotificationPayload): Promise<void> {
+    if (this.webhookUrl) {
+      try {
+        const res = await fetch(this.webhookUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text: `${payload.subject}\n${payload.body}`,
+            blocks: [
+              {
+                type: 'section',
+                text: {
+                  type: 'mrkdwn',
+                  text: `*${payload.subject}*\n${payload.body}`
+                }
+              }
+            ]
+          }),
+          signal: AbortSignal.timeout(5000)
+        });
+        if (!res.ok) {
+          console.warn(`[NotificationService] Slack webhook returned status ${res.status}`);
+        }
+      } catch (err: any) {
+        console.warn(`[NotificationService] Slack webhook dispatch failed: ${err.message}`);
+      }
+    }
+  }
 
   public async notifyIncidentCreated(incident: Incident): Promise<NotificationPayload> {
     const payload: NotificationPayload = {
@@ -23,6 +53,7 @@ export class NotificationService {
     };
 
     this.dispatchHistory.push(payload);
+    await this.dispatch(payload);
     return payload;
   }
 
@@ -37,6 +68,7 @@ export class NotificationService {
     };
 
     this.dispatchHistory.push(payload);
+    await this.dispatch(payload);
     return payload;
   }
 

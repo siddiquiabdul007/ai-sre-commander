@@ -1,29 +1,22 @@
 /**
  * Observability Agent — Real PromQL Metrics & Anomaly Investigation
  * 
- * PRD v2.0 §3.4: Real PromQL queries against in-cluster Prometheus.
- * - Queries real memory, CPU, and error rate metrics
- * - Gathers evidence with full provenance from live API
- * - Supports offline mode for deterministic local testing
+ * PRD v3.0 Mandate:
+ * - Strictly live: No mock or offline simulation paths.
+ * - Queries in-cluster Prometheus directly for real container metrics.
+ * - Gathers evidence with cryptographic provenance hashes from live API.
  */
 
 import { randomUUID, createHash } from 'node:crypto';
 import type { EvidenceObject } from '@ai-sre/event-schema';
 import { PrometheusClient } from './prometheus-client.js';
 
-export type TelemetryMode = 'live' | 'offline';
-
 export class ObservabilityAgent {
   private client: PrometheusClient;
-  private mode: TelemetryMode;
 
-  constructor(options?: { mode?: TelemetryMode; prometheusUrl?: string }) {
-    this.mode = options?.mode || (process.env.TELEMETRY_MODE as TelemetryMode) || (process.env.PROMETHEUS_URL ? 'live' : 'offline');
+  constructor(options?: { prometheusUrl?: string }) {
     this.client = new PrometheusClient({ baseUrl: options?.prometheusUrl });
-  }
-
-  public getMode(): TelemetryMode {
-    return this.mode;
+    console.log(`[ObservabilityAgent] LIVE mode — connected to Prometheus at ${this.client.getBaseUrl()}`);
   }
 
   public async investigate(incidentId: string, context: {
@@ -31,15 +24,7 @@ export class ObservabilityAgent {
     namespace?: string;
     metricsBaseline?: any;
   }): Promise<EvidenceObject[]> {
-    if (this.mode === 'live') {
-      try {
-        return await this.investigateLive(incidentId, context);
-      } catch (err: any) {
-        console.warn(`[ObservabilityAgent] Live query failed (${err.message}). Falling back to offline.`);
-        return this.investigateOffline(incidentId, context);
-      }
-    }
-    return this.investigateOffline(incidentId, context);
+    return this.investigateLive(incidentId, context);
   }
 
   /**
@@ -50,7 +35,7 @@ export class ObservabilityAgent {
     namespace?: string;
   }): Promise<EvidenceObject[]> {
     const evidenceList: EvidenceObject[] = [];
-    const namespace = context.namespace || 'sre-demo';
+    const namespace = context.namespace || process.env.K8S_NAMESPACE || 'sre-demo';
     const service = context.service;
 
     // 1. Query container memory working set bytes
@@ -69,17 +54,18 @@ export class ObservabilityAgent {
         const avgMb = Math.round(totalMb / podValues.length);
         const maxMb = Math.max(...podValues.map(v => v.mb));
 
+        const isElevated = maxMb > 350;
         const summary = `Memory working set across ${podValues.length} pod(s) of '${service}' in '${namespace}': avg ${avgMb}MB, peak ${maxMb}MB.`;
 
         evidenceList.push({
           id: randomUUID(),
           incidentId,
-          type: maxMb > 400 ? 'METRIC_ANOMALY' : 'BASELINE_DEVIATION',
+          type: isElevated ? 'METRIC_ANOMALY' : 'BASELINE_DEVIATION',
           source: 'prometheus',
           title: `Container Memory Working Set: ${avgMb}MB avg`,
           summary,
-          confidence: maxMb > 400 ? 94 : 85,
-          isContradictory: maxMb < 200,
+          confidence: isElevated ? 94 : 85,
+          isContradictory: maxMb < 100,
           provenance: {
             sourceSystem: this.client.getBaseUrl(),
             queryOrFilter: memQuery,
@@ -100,7 +86,7 @@ export class ObservabilityAgent {
       console.warn(`[ObservabilityAgent] Memory query error: ${err.message}`);
     }
 
-    // 2. Query container restart or error indicators
+    // 2. Query container restarts
     const restartQuery = `kube_pod_container_status_restarts_total{container="${service}",namespace="${namespace}"}`;
     try {
       const restartResults = await this.client.query(restartQuery);
@@ -159,71 +145,10 @@ export class ObservabilityAgent {
         });
       }
     } catch (err: any) {
-      // Scrape gaps / tolerance
+      console.warn(`[ObservabilityAgent] Scrape health query error: ${err.message}`);
     }
 
-    // If no live evidence gathered (e.g. freshly started pods before scrape interval), fallback to offline
-    if (evidenceList.length === 0) {
-      return this.investigateOffline(incidentId, context);
-    }
-
-    return evidenceList;
-  }
-
-  /**
-   * OFFLINE: Deterministic simulated metrics for local dev/testing
-   */
-  private investigateOffline(incidentId: string, context: { service: string }): EvidenceObject[] {
-    const evidenceList: EvidenceObject[] = [];
-
-    // 1. Error rate anomaly
-    evidenceList.push({
-      id: randomUUID(),
-      incidentId,
-      type: 'METRIC_ANOMALY',
-      source: 'prometheus',
-      title: 'HTTP 5xx Error Rate Spike (6.8%)',
-      summary: `HTTP 5xx responses for ${context.service} spiked to 6.8% (normal baseline < 0.05%). Alert HighErrorRate5xx firing.`,
-      confidence: 98,
-      isContradictory: false,
-      provenance: {
-        sourceSystem: 'prometheus-k8s',
-        queryOrFilter: `rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) * 100`,
-        extractedAt: new Date().toISOString(),
-        untrustedInputHash: 'prom_err_hash_456'
-      },
-      data: {
-        currentValue: 6.8,
-        baselineValue: 0.04,
-        threshold: 1.0,
-        unit: 'percent'
-      }
-    });
-
-    // 2. Memory usage curve
-    evidenceList.push({
-      id: randomUUID(),
-      incidentId,
-      type: 'BASELINE_DEVIATION',
-      source: 'prometheus',
-      title: 'Monotonic Memory Growth Anomaly (Leak Signature)',
-      summary: `Pod memory usage showed steep linear growth from 180Mi to 512Mi limit within 7 minutes of deployment rollout.`,
-      confidence: 94,
-      isContradictory: false,
-      provenance: {
-        sourceSystem: 'prometheus-k8s',
-        queryOrFilter: `container_memory_working_set_bytes{container="${context.service}"}`,
-        extractedAt: new Date().toISOString(),
-        untrustedInputHash: 'prom_mem_hash_789'
-      },
-      data: {
-        slope: 'positive_linear_steep',
-        startingMb: 180,
-        peakMb: 512,
-        leakSignatureDetected: true
-      }
-    });
-
+    console.log(`[ObservabilityAgent] LIVE investigation: gathered ${evidenceList.length} evidence items for ${service}`);
     return evidenceList;
   }
 }

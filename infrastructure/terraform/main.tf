@@ -51,7 +51,7 @@ resource "azurerm_container_registry" "acr" {
   resource_group_name = azurerm_resource_group.sre_rg.name
   location            = azurerm_resource_group.sre_rg.location
   sku                 = "Basic"
-  admin_enabled       = true
+  admin_enabled       = false
 
   tags = azurerm_resource_group.sre_rg.tags
 }
@@ -98,7 +98,7 @@ resource "azurerm_key_vault" "kv" {
   enabled_for_disk_encryption = true
   tenant_id                   = data.azurerm_client_config.current.tenant_id
   soft_delete_retention_days  = 7
-  purge_protection_enabled    = false
+  purge_protection_enabled    = true
   sku_name                    = "standard"
 
   access_policy {
@@ -154,14 +154,21 @@ resource "azurerm_subnet" "postgres_subnet" {
   }
 }
 
-# 9. Azure Database for PostgreSQL Flexible Server (PRD v2.0 §3.3)
+# 9a. Cryptographically random database password (PRD v4.0 §A.3)
+resource "random_password" "pg_admin" {
+  length           = 32
+  special          = true
+  override_special = "!@#$%"
+}
+
+# 9b. Azure Database for PostgreSQL Flexible Server (PRD v2.0 §3.3)
 resource "azurerm_postgresql_flexible_server" "pg" {
   name                   = "pg-${var.prefix}-${var.environment}-${random_string.suffix.result}"
   resource_group_name    = azurerm_resource_group.sre_rg.name
   location               = azurerm_resource_group.sre_rg.location
   version                = "16"
   administrator_login    = "sreadmin"
-  administrator_password = "SreCmd!${random_string.suffix.result}2026"
+  administrator_password = random_password.pg_admin.result
   storage_mb             = 32768
   sku_name               = var.postgres_sku
   backup_retention_days  = 7
@@ -170,11 +177,21 @@ resource "azurerm_postgresql_flexible_server" "pg" {
   tags = azurerm_resource_group.sre_rg.tags
 }
 
-resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_all" {
-  name             = "allow-all"
+# 9c. Scoped firewall rules — PRD v4.0 §A.2: AKS subnet + developer IP only
+# CRITICAL: Replaces the previous 0.0.0.0–255.255.255.255 rule that exposed
+# the database to the entire internet.
+resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_aks_subnet" {
+  name             = "allow-aks-subnet"
   server_id        = azurerm_postgresql_flexible_server.pg.id
-  start_ip_address = "0.0.0.0"
-  end_ip_address   = "255.255.255.255"
+  start_ip_address = "10.100.1.0"
+  end_ip_address   = "10.100.1.255"
+}
+
+resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_developer" {
+  name             = "allow-developer-ip"
+  server_id        = azurerm_postgresql_flexible_server.pg.id
+  start_ip_address = var.developer_ip
+  end_ip_address   = var.developer_ip
 }
 
 resource "azurerm_postgresql_flexible_server_database" "sre_db" {

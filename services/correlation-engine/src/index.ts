@@ -11,16 +11,16 @@ export interface CorrelationResult {
 
 export class CorrelationEngine {
   constructor(
-    private incidentRepo: IncidentRepository,
+    private incidentRepo: any,
     private windowMinutes: number = 30
   ) {}
 
   /**
    * Correlates an incoming event with active incidents or creates a new incident.
    */
-  public correlate(event: NormalizedEvent): CorrelationResult {
-    const activeIncidents: Incident[] = this.incidentRepo
-      .listIncidents()
+  public async correlate(event: NormalizedEvent): Promise<CorrelationResult> {
+    const rawIncidents = await this.incidentRepo.listIncidents();
+    const activeIncidents: Incident[] = (rawIncidents || [])
       .filter((inc: Incident) => !['RESOLVED', 'POSTMORTEM'].includes(inc.state));
 
     const eventTime = new Date(event.timestamp).getTime();
@@ -42,7 +42,9 @@ export class CorrelationEngine {
             incident.severity = 'SEV-2';
           }
 
-          this.incidentRepo.linkEvent(incident.id, event);
+          if (this.incidentRepo.linkEvent) {
+            await this.incidentRepo.linkEvent(incident.id, event);
+          }
           return {
             matchedIncidentId: incident.id,
             isNewIncident: false,
@@ -63,7 +65,7 @@ export class CorrelationEngine {
       event.eventType.includes('crashloop');
 
     if (isTriggeringEvent) {
-      const newIncident = this.incidentRepo.createIncident({
+      const newIncident = await this.incidentRepo.createIncident({
         title: `Service Degradation: ${event.title}`,
         service: event.service,
         severity: event.severity === 'CRITICAL' ? 'SEV-1' : 'SEV-2',
@@ -83,7 +85,7 @@ export class CorrelationEngine {
     }
 
     // 3. For benign events (e.g. deployment or info) when no incident is active, create an informational tracked incident if requested
-    const trackedIncident = this.incidentRepo.createIncident({
+    const trackedIncident = await this.incidentRepo.createIncident({
       title: `Tracked Operation: ${event.title}`,
       service: event.service,
       severity: 'SEV-3',

@@ -12,8 +12,6 @@
     "@ai-sre/agent-change-intelligence": "*",
     "@ai-sre/agent-kubernetes": "*",
     "@ai-sre/agent-observability": "*",
-    "@ai-sre/agent-rca": "*",
-    "@ai-sre/agent-remediation": "*",
     "@ai-sre/agent-verification": "*",
     "@ai-sre/event-schema": "*",
     "@ai-sre/incident-engine": "*",

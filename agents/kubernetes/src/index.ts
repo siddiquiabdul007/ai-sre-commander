@@ -1,15 +1,15 @@
 /**
  * Kubernetes Investigation Agent — Real Pod/Event Queries
  * 
- * PRD v2.0 §3.2: Real K8s API calls for evidence gathering.
- * - K8S_MODE=live: Real pod status, events, container termination via @kubernetes/client-node
- * - K8S_MODE=offline: Deterministic simulated evidence (existing behavior)
+ * PRD v3.0 Mandate:
+ * - Strictly live: No mock or offline simulation paths.
+ * - Authenticates with scoped 'sre-reader' service account credentials.
+ * - Gathers real pod status, restarts, OOMKills, events, and deployment specs.
  */
 
-import { randomUUID } from 'node:crypto';
+import { randomUUID, createHash } from 'node:crypto';
 import * as k8s from '@kubernetes/client-node';
 import type { EvidenceObject } from '@ai-sre/event-schema';
-import { createHash } from 'node:crypto';
 
 export interface PodConditionSummary {
   podName: string;
@@ -20,35 +20,44 @@ export interface PodConditionSummary {
   isOOMKilled: boolean;
 }
 
-type K8sMode = 'live' | 'offline';
-
 export class KubernetesAgent {
-  private mode: K8sMode;
-  private kc: k8s.KubeConfig | null = null;
-  private coreApi: k8s.CoreV1Api | null = null;
-  private appsApi: k8s.AppsV1Api | null = null;
+  private kc: k8s.KubeConfig;
+  private coreApi: k8s.CoreV1Api;
+  private appsApi: k8s.AppsV1Api;
 
   constructor() {
-    this.mode = (process.env.K8S_MODE as K8sMode) || 'offline';
+    this.kc = new k8s.KubeConfig();
+    const isCluster = Boolean(process.env.KUBERNETES_SERVICE_HOST);
+    const readerToken = process.env.K8S_READER_TOKEN;
 
-    if (this.mode === 'live') {
-      try {
-        this.kc = new k8s.KubeConfig();
-        if (process.env.KUBERNETES_SERVICE_HOST) {
-          this.kc.loadFromCluster();
-        } else {
-          this.kc.loadFromDefault();
-        }
-        this.coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
-        this.appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
-        console.log('[KubernetesAgent] LIVE mode — real K8s API calls enabled.');
-      } catch (error: any) {
-        console.warn(`[KubernetesAgent] Failed to init K8s client: ${error.message}. Falling back to offline.`);
-        this.mode = 'offline';
-      }
+    if (isCluster) {
+      this.kc.loadFromCluster();
+      console.log('[KubernetesAgent] LIVE mode — loaded in-cluster config.');
     } else {
-      console.log('[KubernetesAgent] OFFLINE mode — deterministic evidence.');
+      if (!readerToken) {
+        throw new Error(
+          '[KubernetesAgent] FATAL: K8S_READER_TOKEN is not set and not running in-cluster. ' +
+          'Refusing to fall back to default kubeconfig (potential cluster-admin). ' +
+          'Set K8S_READER_TOKEN to a scoped service account token.'
+        );
+      }
+      this.kc.loadFromDefault();
+      const cluster = this.kc.getCurrentCluster();
+      if (cluster) {
+        const userKc = new k8s.KubeConfig();
+        userKc.loadFromClusterAndUser(cluster, {
+          name: 'sre-reader',
+          token: readerToken.trim()
+        });
+        this.kc = userKc;
+        console.log(`[KubernetesAgent] LIVE mode — loaded scoped sre-reader credentials for ${cluster.server}.`);
+      } else {
+        throw new Error('[KubernetesAgent] FATAL: No cluster found in kubeconfig.');
+      }
     }
+
+    this.coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    this.appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
   }
 
   public async investigate(incidentId: string, context: {
@@ -57,26 +66,12 @@ export class KubernetesAgent {
     cluster: string;
     k8sEvents?: any[];
   }): Promise<EvidenceObject[]> {
-    if (this.mode === 'live' && this.coreApi && this.appsApi) {
-      return this.investigateLive(incidentId, context);
-    }
-    return this.investigateOffline(incidentId, context);
-  }
-
-  /**
-   * LIVE: Query real K8s API for pod status, events, and container state
-   */
-  private async investigateLive(incidentId: string, context: {
-    service: string;
-    namespace: string;
-    cluster: string;
-  }): Promise<EvidenceObject[]> {
     const evidenceList: EvidenceObject[] = [];
     const namespace = context.namespace || process.env.K8S_NAMESPACE || 'sre-demo';
 
     // 1. Query pods with label selector
     try {
-      const podResponse = await this.coreApi!.listNamespacedPod({
+      const podResponse = await this.coreApi.listNamespacedPod({
         namespace,
         labelSelector: `app=${context.service}`,
       });
@@ -93,7 +88,7 @@ export class KubernetesAgent {
           const isOOM = terminated?.reason === 'OOMKilled';
           const exitCode = terminated?.exitCode;
 
-          // Only emit evidence for notable conditions
+          // Emit evidence for notable conditions
           if (restartCount > 0 || isOOM || phase !== 'Running') {
             const summary = isOOM
               ? `Container '${cs.name}' in pod '${podName}' was OOMKilled (exit code ${exitCode}). ${restartCount} restarts.`
@@ -132,7 +127,7 @@ export class KubernetesAgent {
           }
         }
 
-        // If all containers are healthy, emit a contradictory evidence
+        // If all containers are healthy, emit baseline evidence
         if (phase === 'Running' && containerStatuses.every(cs => cs.ready && cs.restartCount === 0)) {
           evidenceList.push({
             id: randomUUID(),
@@ -175,27 +170,12 @@ export class KubernetesAgent {
       }
     } catch (error: any) {
       console.error(`[KubernetesAgent] Pod query failed: ${error.message}`);
-      evidenceList.push({
-        id: randomUUID(),
-        incidentId,
-        type: 'K8S_EVENT',
-        source: 'kubernetes',
-        title: 'K8s API query failed',
-        summary: `Failed to query pods: ${error.message}`,
-        confidence: 50,
-        isContradictory: false,
-        provenance: {
-          sourceSystem: `${context.cluster}/${namespace}`,
-          extractedAt: new Date().toISOString(),
-          untrustedInputHash: createHash('sha256').update(error.message).digest('hex').substring(0, 16)
-        },
-        data: { error: error.message }
-      });
+      throw new Error(`[KubernetesAgent] Pod query failed: ${error.message}`);
     }
 
     // 2. Query namespace events
     try {
-      const eventResponse = await this.coreApi!.listNamespacedEvent({
+      const eventResponse = await this.coreApi.listNamespacedEvent({
         namespace,
       });
       const events = eventResponse.items;
@@ -246,7 +226,7 @@ export class KubernetesAgent {
 
     // 3. Query deployment rollout status
     try {
-      const deployment = await this.appsApi!.readNamespacedDeployment({
+      const deployment = await this.appsApi.readNamespacedDeployment({
         name: context.service,
         namespace,
       });
@@ -277,50 +257,12 @@ export class KubernetesAgent {
         });
       }
     } catch (error: any) {
-      // Deployment may not exist — that's okay for some services
       if (error.statusCode !== 404) {
         console.warn(`[KubernetesAgent] Deployment query failed: ${error.message}`);
       }
     }
 
-    console.log(`[KubernetesAgent] LIVE investigation: ${evidenceList.length} evidence items for ${context.service}`);
+    console.log(`[KubernetesAgent] LIVE investigation: gathered ${evidenceList.length} evidence items for ${context.service}`);
     return evidenceList;
-  }
-
-  /**
-   * OFFLINE: Deterministic simulated evidence (original behavior)
-   */
-  private investigateOffline(incidentId: string, context: {
-    service: string;
-    namespace: string;
-    cluster: string;
-  }): EvidenceObject[] {
-    const podName = `${context.service}-7b9d9c-f12`;
-
-    return [{
-      id: randomUUID(),
-      incidentId,
-      type: 'K8S_EVENT',
-      source: 'kubernetes',
-      title: `Pod OOMKilled and CrashLoopBackOff on ${podName}`,
-      summary: `Container in pod '${podName}' exceeded memory limit (512Mi) with exit code 137. 4 restarts in the last 10 minutes.`,
-      confidence: 96,
-      isContradictory: false,
-      provenance: {
-        sourceSystem: `${context.cluster}/${context.namespace}`,
-        queryOrFilter: `kubectl get pods -n ${context.namespace} -l app=${context.service}`,
-        extractedAt: new Date().toISOString(),
-        untrustedInputHash: 'k8s_ev_hash_123'
-      },
-      data: {
-        podName,
-        namespace: context.namespace,
-        restartCount: 4,
-        exitCode: 137,
-        reason: 'OOMKilled',
-        memoryLimit: '512Mi',
-        currentMemoryUsage: '524Mi'
-      }
-    }];
   }
 }

@@ -6,11 +6,11 @@ import type { AuthUser } from '@ai-sre/auth';
 export class RemediationEngine {
   private policyEngine = new PolicyEngine();
 
-  constructor(private incidentRepo: IncidentRepository) {}
+  constructor(private incidentRepo: any) {}
 
-  public getProposal(incidentId: string, proposalId: string): RemediationProposal | undefined {
-    const incident = this.incidentRepo.getIncident(incidentId);
-    return incident?.remediationProposals.find((p) => p.id === proposalId);
+  public async getProposal(incidentId: string, proposalId: string): Promise<RemediationProposal | undefined> {
+    const incident = await this.incidentRepo.getIncident(incidentId);
+    return incident?.remediationProposals.find((p: any) => p.id === proposalId);
   }
 
   public evaluateProposal(proposal: RemediationProposal): PolicyEvaluationResult {
@@ -23,12 +23,12 @@ export class RemediationEngine {
     approver: AuthUser,
     justification?: string
   ): Promise<RemediationProposal> {
-    const incident = this.incidentRepo.getIncident(incidentId);
+    const incident = await this.incidentRepo.getIncident(incidentId);
     if (!incident) {
       throw new Error(`Incident ${incidentId} not found`);
     }
 
-    const proposal = incident.remediationProposals.find((p) => p.id === proposalId);
+    const proposal = incident.remediationProposals.find((p: any) => p.id === proposalId);
     if (!proposal) {
       throw new Error(`Remediation proposal ${proposalId} not found`);
     }
@@ -54,10 +54,10 @@ export class RemediationEngine {
 
     // 4. Update incident state machine
     if (incident.state === 'REMEDIATION_PROPOSED') {
-      this.incidentRepo.transitionState(incidentId, 'AWAITING_APPROVAL', 'Proposal reviewed by engineer.');
+      await this.incidentRepo.transitionState(incidentId, 'AWAITING_APPROVAL', 'Proposal reviewed by engineer.');
     }
 
-    this.incidentRepo.addTimelineEntry(incidentId, {
+    await this.incidentRepo.addTimelineEntry(incidentId, {
       type: 'APPROVAL',
       title: `Remediation APPROVED by ${approver.name}`,
       description: justification || `Approved action ${proposal.action} for ${proposal.targetResource}.`,
@@ -68,7 +68,10 @@ export class RemediationEngine {
       }
     });
 
-    this.incidentRepo.updateIncident(incident);
+    if (this.incidentRepo.updateProposalStatus) {
+      await this.incidentRepo.updateProposalStatus(proposalId, 'APPROVED');
+    }
+    await this.incidentRepo.updateIncident(incident);
     return proposal;
   }
 
@@ -78,12 +81,12 @@ export class RemediationEngine {
     rejector: AuthUser,
     reason: string
   ): Promise<RemediationProposal> {
-    const incident = this.incidentRepo.getIncident(incidentId);
+    const incident = await this.incidentRepo.getIncident(incidentId);
     if (!incident) {
       throw new Error(`Incident ${incidentId} not found`);
     }
 
-    const proposal = incident.remediationProposals.find((p) => p.id === proposalId);
+    const proposal = incident.remediationProposals.find((p: any) => p.id === proposalId);
     if (!proposal) {
       throw new Error(`Remediation proposal ${proposalId} not found`);
     }
@@ -91,14 +94,17 @@ export class RemediationEngine {
     proposal.status = 'REJECTED';
     proposal.rejectionReason = reason;
 
-    this.incidentRepo.addTimelineEntry(incidentId, {
+    await this.incidentRepo.addTimelineEntry(incidentId, {
       type: 'STATE_CHANGE',
       title: `Remediation REJECTED by ${rejector.name}`,
       description: `Reason: ${reason}`,
       data: { proposalId, rejector: rejector.email }
     });
 
-    this.incidentRepo.updateIncident(incident);
+    if (this.incidentRepo.updateProposalStatus) {
+      await this.incidentRepo.updateProposalStatus(proposalId, 'REJECTED');
+    }
+    await this.incidentRepo.updateIncident(incident);
     return proposal;
   }
 }

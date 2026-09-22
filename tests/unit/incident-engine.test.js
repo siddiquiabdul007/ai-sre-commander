@@ -74,7 +74,7 @@ describe('Incident Engine & Event Ingestion Tests', () => {
     }, IllegalStateTransitionError);
   });
 
-  it('correlates temporal signals from deployment to alert into single incident', () => {
+  it('correlates temporal signals from deployment to alert into single incident', async () => {
     const repo = new IncidentRepository();
     const correlationEngine = new CorrelationEngine(repo, 30);
 
@@ -83,7 +83,7 @@ describe('Incident Engine & Event Ingestion Tests', () => {
       deployment: { ref: 'v2.7.4', sha: 'c0ffee123456', environment: 'production' },
       repository: { name: 'checkout-api' }
     });
-    const res1 = correlationEngine.correlate(ghEvent);
+    const res1 = await correlationEngine.correlate(ghEvent);
     assert.equal(res1.isNewIncident, true);
     const incidentId = res1.incident.id;
 
@@ -93,7 +93,7 @@ describe('Incident Engine & Event Ingestion Tests', () => {
       involvedObject: { kind: 'Pod', name: 'checkout-api-5c74787bd9-xyz', labels: { app: 'checkout-api' } },
       message: 'Memory threshold exceeded'
     });
-    const res2 = correlationEngine.correlate(k8sEvent);
+    const res2 = await correlationEngine.correlate(k8sEvent);
     assert.equal(res2.isNewIncident, false);
     assert.equal(res2.matchedIncidentId, incidentId);
 
@@ -102,7 +102,7 @@ describe('Incident Engine & Event Ingestion Tests', () => {
       labels: { alertname: 'HighErrorRate5xx', service: 'checkout-api', severity: 'critical' },
       annotations: { summary: '5xx spike' }
     });
-    const res3 = correlationEngine.correlate(promAlert);
+    const res3 = await correlationEngine.correlate(promAlert);
     assert.equal(res3.isNewIncident, false);
     assert.equal(res3.matchedIncidentId, incidentId);
 

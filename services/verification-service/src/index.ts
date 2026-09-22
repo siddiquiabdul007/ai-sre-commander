@@ -5,13 +5,13 @@ import type { Incident } from '@ai-sre/event-schema';
 export class VerificationService {
   private verificationAgent = new VerificationAgent();
 
-  constructor(private incidentRepo: IncidentRepository) {}
+  constructor(private incidentRepo: any) {}
 
   public async verifyIncidentRecovery(incidentId: string): Promise<{
     incident: Incident;
     verification: VerificationResult;
   }> {
-    const incident = this.incidentRepo.getIncident(incidentId);
+    const incident = await this.incidentRepo.getIncident(incidentId);
     if (!incident) {
       throw new Error(`Incident ${incidentId} not found`);
     }
@@ -21,7 +21,7 @@ export class VerificationService {
       incident.namespace
     );
 
-    this.incidentRepo.addTimelineEntry(incidentId, {
+    await this.incidentRepo.addTimelineEntry(incidentId, {
       type: 'VERIFICATION',
       title: verification.verified ? 'Verification Passed: Health Restored' : 'Verification Inconclusive',
       description: verification.summary,
@@ -29,12 +29,12 @@ export class VerificationService {
     });
 
     if (verification.verified) {
-      this.incidentRepo.transitionState(incidentId, 'RESOLVED', 'All golden signals returned to baseline post-remediation.');
+      await this.incidentRepo.transitionState(incidentId, 'RESOLVED', 'All golden signals returned to baseline post-remediation.');
     } else {
-      this.incidentRepo.transitionState(incidentId, 'ESCALATED', 'Post-remediation metrics did not normalize in expected window.');
+      await this.incidentRepo.transitionState(incidentId, 'ESCALATED', 'Post-remediation metrics did not normalize in expected window.');
     }
 
-    this.incidentRepo.updateIncident(incident);
+    await this.incidentRepo.updateIncident(incident);
 
     return {
       incident,

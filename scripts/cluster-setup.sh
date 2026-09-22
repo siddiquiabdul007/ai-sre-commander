@@ -108,7 +108,7 @@ rules:
     resources: ["pods"]
     verbs: ["get", "list", "delete"]
   - apiGroups: ["apps"]
-    resources: ["deployments"]
+    resources: ["deployments", "replicasets"]
     verbs: ["get", "list", "patch", "update"]
   - apiGroups: ["apps"]
     resources: ["deployments/rollback"]

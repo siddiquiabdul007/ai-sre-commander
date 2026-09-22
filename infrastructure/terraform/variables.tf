@@ -39,3 +39,9 @@ variable "enable_immutable_storage" {
   description = "Enable WORM/immutable storage for tamper-evident audit ledger"
   default     = true
 }
+
+variable "developer_ip" {
+  type        = string
+  description = "Developer machine IP address for PostgreSQL firewall allow-list. No default — must be set explicitly to prevent accidental wide-open access."
+  sensitive   = true
+}

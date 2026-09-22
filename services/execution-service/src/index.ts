@@ -1,20 +1,17 @@
 /**
  * Execution Service — Real Kubernetes Remediation Execution
  * 
- * PRD v2.0 §3.2: Real K8s API calls for remediation execution.
- * - K8S_MODE=live: Real @kubernetes/client-node calls
- * - K8S_MODE=offline: Deterministic simulated responses (local dev only)
- * - Idempotency enforcement via in-memory key set (Stage 5 will migrate to DB)
- * - Error handling: permission denied, stale revision, network timeout
+ * PRD v3.0 Mandate:
+ * - Strictly live: No mock or offline simulation paths.
+ * - Idempotency enforcement: prevents double execution of same proposal.
+ * - Real K8s client with scoped 'sre-executor' credentials.
+ * - Async-safe repository integration.
  */
 
 import { randomUUID } from 'node:crypto';
 import type { RemediationProposal } from '@ai-sre/event-schema';
-import { IncidentRepository } from '@ai-sre/incident-engine';
 import { TelemetryCollector } from '@ai-sre/telemetry';
 import { K8sClient } from './k8s-client.js';
-
-export type K8sMode = 'live' | 'offline';
 
 export interface ExecutionResult {
   executionId: string;
@@ -23,52 +20,59 @@ export interface ExecutionResult {
   action: string;
   targetResource: string;
   outputMessage: string;
-  k8sMode: K8sMode;
+  k8sMode: 'live';
   timestamp: string;
+  targetImage?: string;
+  revision?: number;
 }
 
 export class ExecutionService {
-  private executedKeys = new Set<string>();
+  private executedKeys = new Map<string, ExecutionResult>();
   private telemetry = TelemetryCollector.getInstance();
-  private k8sClient: K8sClient | null = null;
-  private mode: K8sMode;
+  private k8sClient: K8sClient;
 
-  constructor(private incidentRepo: IncidentRepository) {
-    this.mode = (process.env.K8S_MODE as K8sMode) || 'offline';
+  constructor(private incidentRepo: any) {
+    this.k8sClient = new K8sClient({
+      namespace: process.env.K8S_NAMESPACE || 'sre-demo',
+      role: 'executor'
+    });
+    console.log('[ExecutionService] Initialized in LIVE mode with sre-executor role.');
+  }
 
-    if (this.mode === 'live') {
-      try {
-        this.k8sClient = new K8sClient({
-          namespace: process.env.K8S_NAMESPACE || 'sre-demo'
-        });
-        console.log('[ExecutionService] Initialized in LIVE mode — real K8s API calls enabled.');
-      } catch (error: any) {
-        console.error(`[ExecutionService] Failed to init K8s client: ${error.message}. Falling back to offline.`);
-        this.mode = 'offline';
-      }
-    } else {
-      console.log('[ExecutionService] Initialized in OFFLINE mode — deterministic responses.');
-    }
+  public getK8sClient(): K8sClient {
+    return this.k8sClient;
   }
 
   public async executeProposal(incidentId: string, proposal: RemediationProposal): Promise<ExecutionResult> {
-    const incident = this.incidentRepo.getIncident(incidentId);
+    const incident = await this.incidentRepo.getIncident(incidentId);
     if (!incident) {
       throw new Error(`Incident ${incidentId} not found`);
     }
 
-    // 1. Enforce Idempotency Key (PRD §18)
+    // 1. Enforce Idempotency Key (PRD §18) - check in-memory cache and PostgreSQL
     if (this.executedKeys.has(proposal.idempotencyKey)) {
+      const cached = this.executedKeys.get(proposal.idempotencyKey)!;
       return {
-        executionId: `exec_cached_${proposal.idempotencyKey.substring(0, 8)}`,
-        idempotencyKey: proposal.idempotencyKey,
-        status: 'SUCCESS',
-        action: proposal.action,
-        targetResource: proposal.targetResource,
+        ...cached,
         outputMessage: `Idempotent replay detected: action already executed for key ${proposal.idempotencyKey}.`,
-        k8sMode: this.mode,
         timestamp: new Date().toISOString()
       };
+    }
+
+    if (typeof (this.incidentRepo as any).getProposalByIdempotencyKey === 'function') {
+      const dbRecord = await (this.incidentRepo as any).getProposalByIdempotencyKey(proposal.idempotencyKey);
+      if (dbRecord && (dbRecord.status === 'SUCCESS' || dbRecord.status === 'EXECUTING')) {
+        return {
+          executionId: `exec_db_${proposal.idempotencyKey.substring(0, 8)}`,
+          idempotencyKey: proposal.idempotencyKey,
+          status: 'SUCCESS',
+          action: proposal.action,
+          targetResource: proposal.targetResource,
+          outputMessage: `Idempotent replay detected in PostgreSQL: action already executed for key ${proposal.idempotencyKey}.`,
+          k8sMode: 'live',
+          timestamp: new Date().toISOString()
+        };
+      }
     }
 
     // 2. Validate status
@@ -76,27 +80,22 @@ export class ExecutionService {
       throw new Error(`Cannot execute proposal ${proposal.id}: status is '${proposal.status}', must be 'APPROVED'.`);
     }
 
-    this.executedKeys.add(proposal.idempotencyKey);
-
     // 3. State transition: EXECUTING
-    this.incidentRepo.transitionState(incidentId, 'EXECUTING', `Executing remediation ${proposal.action} on ${proposal.targetResource}.`);
+    await this.incidentRepo.transitionState(incidentId, 'EXECUTING', `Executing remediation ${proposal.action} on ${proposal.targetResource}.`);
     proposal.status = 'EXECUTING';
 
     const executionId = randomUUID();
     let outputMsg = '';
     let success = false;
+    let targetImage: string | undefined;
+    let revision: number | undefined;
 
     try {
-      if (this.mode === 'live' && this.k8sClient) {
-        // LIVE: Real Kubernetes API calls
-        const result = await this.executeLive(proposal);
-        outputMsg = result.message;
-        success = result.success;
-      } else {
-        // OFFLINE: Deterministic simulated responses
-        outputMsg = this.executeOffline(proposal);
-        success = true;
-      }
+      const result = await this.executeLive(proposal);
+      outputMsg = result.message;
+      success = result.success;
+      targetImage = result.targetImage;
+      revision = result.revision;
     } catch (error: any) {
       outputMsg = `Execution FAILED: ${error.message}`;
       success = false;
@@ -105,7 +104,7 @@ export class ExecutionService {
     proposal.status = success ? 'SUCCESS' : 'FAILED';
     this.telemetry.recordRemediationExecution(success);
 
-    this.incidentRepo.addTimelineEntry(incidentId, {
+    await this.incidentRepo.addTimelineEntry(incidentId, {
       type: 'EXECUTION',
       title: `Execution ${success ? 'Completed' : 'Failed'}: ${proposal.action}`,
       description: outputMsg,
@@ -113,46 +112,57 @@ export class ExecutionService {
         executionId,
         idempotencyKey: proposal.idempotencyKey,
         parameters: proposal.parameters,
-        k8sMode: this.mode,
-        success
+        k8sMode: 'live',
+        success,
+        targetImage,
+        revision
       }
     });
 
     if (success) {
       // 5. State transition: VERIFYING
-      this.incidentRepo.transitionState(incidentId, 'VERIFYING', 'Action executed; entering post-remediation health verification.');
+      await this.incidentRepo.transitionState(incidentId, 'VERIFYING', 'Action executed; entering post-remediation health verification.');
     } else {
-      // Failed — stay in EXECUTING state, log the failure
       console.error(`[ExecutionService] Execution FAILED for ${proposal.action}: ${outputMsg}`);
     }
 
-    this.incidentRepo.updateIncident(incident);
+    if (typeof this.incidentRepo.updateIncident === 'function') {
+      await this.incidentRepo.updateIncident(incident);
+    }
 
-    return {
+    const execResult: ExecutionResult = {
       executionId,
       idempotencyKey: proposal.idempotencyKey,
       status: success ? 'SUCCESS' : 'FAILED',
       action: proposal.action,
       targetResource: proposal.targetResource,
       outputMessage: outputMsg,
-      k8sMode: this.mode,
-      timestamp: new Date().toISOString()
+      k8sMode: 'live',
+      timestamp: new Date().toISOString(),
+      targetImage,
+      revision
     };
+
+    this.executedKeys.set(proposal.idempotencyKey, execResult);
+    return execResult;
   }
 
   /**
    * LIVE: Execute remediation via real Kubernetes API
    */
-  private async executeLive(proposal: RemediationProposal): Promise<{ success: boolean; message: string }> {
-    if (!this.k8sClient) {
-      throw new Error('K8s client not initialized');
-    }
-
+  private async executeLive(proposal: RemediationProposal): Promise<{
+    success: boolean;
+    message: string;
+    targetImage?: string;
+    revision?: number;
+  }> {
     const actionNormalized = proposal.action.toLowerCase();
 
     switch (actionNormalized) {
       case 'rollback_deployment': {
-        const deploymentName = proposal.parameters?.deploymentName || proposal.parameters?.deployment || proposal.targetResource.replace(/^deployment\//, '');
+        const deploymentName = proposal.parameters?.deploymentName ||
+                               proposal.parameters?.deployment ||
+                               proposal.targetResource.replace(/^deployment\//, '');
         const targetRevision = typeof proposal.parameters?.targetRevision === 'number'
           ? proposal.parameters.targetRevision
           : undefined;
@@ -160,7 +170,8 @@ export class ExecutionService {
       }
 
       case 'restart_pod': {
-        const serviceName = proposal.parameters?.serviceName || proposal.targetResource.replace(/^pod\//, '');
+        const serviceName = proposal.parameters?.serviceName ||
+                            proposal.targetResource.replace(/^pod\//, '');
         // List pods matching the target, delete them to trigger restart
         const pods = await this.k8sClient.listPods(`app=${serviceName}`);
         if (pods.length === 0) {
@@ -174,7 +185,9 @@ export class ExecutionService {
       }
 
       case 'scale_workload': {
-        const deploymentName = proposal.parameters?.deploymentName || proposal.parameters?.deployment || proposal.targetResource.replace(/^deployment\//, '');
+        const deploymentName = proposal.parameters?.deploymentName ||
+                               proposal.parameters?.deployment ||
+                               proposal.targetResource.replace(/^deployment\//, '');
         const replicas = typeof proposal.parameters?.replicas === 'number' ? proposal.parameters.replicas : 2;
         return this.k8sClient.scaleDeployment(String(deploymentName), replicas);
       }
@@ -186,20 +199,6 @@ export class ExecutionService {
         };
     }
   }
-
-  /**
-   * OFFLINE: Deterministic rule-based responses for local development
-   */
-  private executeOffline(proposal: RemediationProposal): string {
-    if (proposal.action === 'rollback_deployment') {
-      const targetRev = proposal.parameters.targetRevision || 26;
-      return `[OFFLINE] Kubernetes API: Deployment '${proposal.parameters.deployment}' in namespace '${proposal.namespace}' rolled back to revision ${targetRev}. RollingUpdate pods progressing.`;
-    } else if (proposal.action === 'restart_pod') {
-      return `[OFFLINE] Kubernetes API: Pod restart triggered for target in namespace '${proposal.namespace}'.`;
-    } else if (proposal.action === 'scale_workload') {
-      return `[OFFLINE] Kubernetes API: Scaled ${proposal.targetResource} to ${proposal.parameters.replicas || 3} replicas.`;
-    } else {
-      return `[OFFLINE] Action ${proposal.action} executed against ${proposal.targetResource}.`;
-    }
-  }
 }
+
+export * from './k8s-client.js';

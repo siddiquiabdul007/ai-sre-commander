@@ -1,14 +1,13 @@
 /**
  * LLM Gateway — Real Gemini API Integration
  * 
- * PRD v2.0 §3.1: Real API integration with structured-output enforcement.
- * - LLM_MODE=live: Real Gemini API calls with schema validation and retry/repair
- * - LLM_MODE=offline: Deterministic rule-based fallback for local dev only
- * 
- * Design rules:
- * - In live mode, NEVER silently fall back to rule-based logic
- * - Retry up to 3 times for malformed output, then FAIL LOUDLY
- * - Record real latency, real token count, real cost
+ * PRD v3.0 §3.1: Real API integration with structured-output enforcement.
+ * - Live Gemini API calls exclusively — no offline/mock mode exists.
+ * - Model routing matches PRD §11.2 task-based routing table.
+ * - Routing decisions logged per request (task type -> model -> tier -> rationale).
+ * - Retries with exponential backoff on transient 429/503 errors.
+ * - Fails loud if retries are exhausted — never silently falls back to rule-based logic.
+ * - Records latency, token count, and cost against telemetry collector.
  */
 
 import { GoogleGenerativeAI, type GenerativeModel, SchemaType } from '@google/generative-ai';
@@ -25,7 +24,7 @@ export type TaskType =
   | 'postmortem'
   | 'code_analysis';
 
-export type LLMMode = 'live' | 'offline';
+export type ModelTier = 'strong_reasoning' | 'fast_low_cost';
 
 export interface LLMRequest<T> {
   task: TaskType;
@@ -42,251 +41,224 @@ export interface LLMResponse<T> {
   latencyMs: number;
   tokensUsed: number;
   costUsd: number;
-  mode: LLMMode;
+  mode: 'live';
   rawResponse?: string;
 }
 
 interface RoutingConfig {
   provider: string;
   model: string;
+  tier: ModelTier;
+  reason: string;
   ratePer1kInput: number;
   ratePer1kOutput: number;
 }
 
-const MAX_RETRIES = 4;
+const MAX_RETRIES = 3;
 
 export class LLMGateway {
   private telemetry = TelemetryCollector.getInstance();
-  private genAI: GoogleGenerativeAI | null = null;
-  private mode: LLMMode;
+  private genAI: GoogleGenerativeAI;
 
   constructor() {
-    this.mode = (process.env.LLM_MODE as LLMMode) || 'offline';
-
-    if (this.mode === 'live') {
-      const apiKey = process.env.GEMINI_API_KEY;
-      if (!apiKey) {
-        throw new Error(
-          '[LLMGateway] LLM_MODE=live but GEMINI_API_KEY is not set. ' +
-          'Set GEMINI_API_KEY in environment or switch to LLM_MODE=offline.'
-        );
-      }
-      this.genAI = new GoogleGenerativeAI(apiKey);
-      console.log('[LLMGateway] Initialized in LIVE mode — real Gemini API calls enabled.');
-    } else {
-      console.log('[LLMGateway] Initialized in OFFLINE mode — deterministic rule-based responses.');
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        '[LLMGateway] GEMINI_API_KEY is not set in environment. ' +
+        'Production PRD v3.0 requires valid Gemini API credentials. Offline mode is forbidden.'
+      );
     }
+    this.genAI = new GoogleGenerativeAI(apiKey);
+    console.log('[LLMGateway] Initialized in LIVE mode — connected to Google Generative AI.');
   }
 
-  public getMode(): LLMMode {
-    return this.mode;
+  public getMode(): 'live' {
+    return 'live';
   }
 
   /**
-   * Routes the task to the optimal model based on PRD §11.2 Model Routing table
+   * Routes the task to the optimal model tier based on PRD §11.2 Model Routing table.
+   * - Strong reasoning tier: RCA, remediation planning, code analysis, postmortem
+   * - Fast/low-cost tier: Classification, log summarization
    */
-  private getRoutingConfig(task: TaskType): RoutingConfig {
+  public getRoutingConfig(task: TaskType): RoutingConfig {
     switch (task) {
-      case 'classification':
-      case 'log_summarization':
-        return { provider: 'Google', model: 'gemini-3.8-flash', ratePer1kInput: 0.00015, ratePer1kOutput: 0.0006 };
       case 'rca':
       case 'remediation_planning':
       case 'code_analysis':
-        return { provider: 'Google', model: 'gemini-3.8-flash', ratePer1kInput: 0.00015, ratePer1kOutput: 0.0006 };
       case 'postmortem':
-        return { provider: 'Google', model: 'gemini-3.8-flash', ratePer1kInput: 0.00015, ratePer1kOutput: 0.0006 };
+        return {
+          provider: 'Google',
+          model: process.env.GEMINI_REASONING_MODEL || 'gemini-3.8-flash',
+          tier: 'strong_reasoning',
+          reason: 'High-complexity causal synthesis requiring deep reasoning, multi-signal correlation, and schema adherence.',
+          ratePer1kInput: 0.00015,
+          ratePer1kOutput: 0.0006
+        };
+
+      case 'classification':
+      case 'log_summarization':
       default:
-        return { provider: 'Google', model: 'gemini-3.8-flash', ratePer1kInput: 0.00015, ratePer1kOutput: 0.0006 };
+        return {
+          provider: 'Google',
+          model: process.env.GEMINI_FAST_MODEL || 'gemini-3.5-flash-lite',
+          tier: 'fast_low_cost',
+          reason: 'High-throughput signal filtering, anomaly classification, and low-latency structured extraction.',
+          ratePer1kInput: 0.000075,
+          ratePer1kOutput: 0.0003
+        };
     }
   }
 
   /**
-   * Invokes the model with prompt injection sanitization and schema validation.
-   * In live mode: real Gemini API call with structured output + retry/repair.
-   * In offline mode: deterministic rule-based response for local dev.
+   * Invokes the real Gemini model with prompt injection sanitization,
+   * schema validation, and transient retry handling.
    */
   public async invoke<T>(request: LLMRequest<T>): Promise<LLMResponse<T>> {
     const config = this.getRoutingConfig(request.task);
+
+    // PRD §11.2 & §3.1: Log routing decisions per request
+    console.log(
+      `[LLMGateway Routing] Task: '${request.task}' -> Model: '${config.model}' ` +
+      `(Tier: '${config.tier}'). Rationale: ${config.reason}`
+    );
 
     // Sanitize untrusted context (PRD §12)
     const sanitized = sanitizeTelemetry(request.context);
     const sanitizedContext = sanitized.sanitizedContent;
 
-    if (this.mode === 'live') {
-      return this.invokeLive(request, config, sanitizedContext);
-    } else {
-      return this.invokeOffline(request, config, sanitizedContext);
-    }
+    return this.invokeLive(request, config, sanitizedContext);
   }
 
   /**
-   * LIVE mode: Real Gemini API call with structured output enforcement.
-   * Retries up to MAX_RETRIES for malformed output. Never silently degrades.
+   * Real Gemini API call with structured output enforcement.
+   * Retries on transient 429/503 errors. Fails loud if retries exhausted.
    */
   private async invokeLive<T>(
     request: LLMRequest<T>,
     config: RoutingConfig,
     sanitizedContext: string
   ): Promise<LLMResponse<T>> {
-    if (!this.genAI) {
-      throw new Error('[LLMGateway] genAI client not initialized in live mode');
-    }
-
     const startTime = Date.now();
     let lastError: Error | null = null;
     let rawResponseText = '';
 
-    const candidateModels = [config.model, 'gemini-3.5-flash-lite', 'gemini-3.8-flash'];
+    // Candidate models in preference order for tier resilience
+    const candidateModels = [
+      config.model,
+      'gemini-3.5-flash-lite',
+      'gemini-3.6-flash'
+    ];
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-      const activeModel = candidateModels[(attempt - 1) % candidateModels.length];
+      const currentModelName = candidateModels[Math.min(attempt - 1, candidateModels.length - 1)];
+
       try {
-        // Build model config with optional response schema
-        const modelConfig: any = {
-          model: activeModel,
+        const generationConfig: any = {
+          maxOutputTokens: request.maxTokens || 4096,
+          temperature: 0.1,
+          responseMimeType: 'application/json'
         };
 
-        // If schema provided, configure for JSON output
         if (request.schema) {
-          const geminiSchema = zodToGeminiSchema(request.schema);
-          modelConfig.generationConfig = {
-            responseMimeType: 'application/json',
-            responseSchema: geminiSchema,
-            maxOutputTokens: request.maxTokens || 4096,
-            temperature: request.task === 'rca' ? 0.3 : 0.2,
-          };
-        } else {
-          modelConfig.generationConfig = {
-            maxOutputTokens: request.maxTokens || 4096,
-            temperature: 0.2,
-          };
+          generationConfig.responseSchema = zodToGeminiSchema(request.schema);
         }
 
-        const model: GenerativeModel = this.genAI.getGenerativeModel(modelConfig);
+        const model: GenerativeModel = this.genAI.getGenerativeModel({
+          model: currentModelName,
+          generationConfig
+        });
 
-        // Build prompt with clear system/user separation
         const fullPrompt = this.buildPrompt(request.task, request.prompt, sanitizedContext);
-
-        // Make real API call
         const result = await model.generateContent(fullPrompt);
         const response = result.response;
         rawResponseText = response.text();
 
-        const latencyMs = Date.now() - startTime;
-
-        // Parse and validate response
+        // Parse and validate with Zod schema if provided
         let parsedData: T;
-        if (request.schema) {
-          const jsonData = JSON.parse(rawResponseText);
-          parsedData = request.schema.parse(jsonData);
-        } else {
-          parsedData = rawResponseText as unknown as T;
+        const cleanedJson = this.cleanJsonResponse(rawResponseText);
+
+        try {
+          const rawParsed = JSON.parse(cleanedJson);
+          if (request.schema) {
+            parsedData = request.schema.parse(rawParsed);
+          } else {
+            parsedData = rawParsed as T;
+          }
+        } catch (parseError: any) {
+          console.warn(
+            `[LLMGateway] Attempt ${attempt}: Schema validation failed (${parseError.message}). Retrying...`
+          );
+          lastError = parseError;
+          await this.backoffDelay(attempt);
+          continue;
         }
 
-        // Calculate real token usage from response metadata
+        const latencyMs = Date.now() - startTime;
         const usageMetadata = response.usageMetadata;
-        const tokensUsed = usageMetadata
-          ? (usageMetadata.promptTokenCount || 0) + (usageMetadata.candidatesTokenCount || 0)
-          : Math.round(rawResponseText.length / 4) + Math.round(fullPrompt.length / 4);
-        
-        const inputTokens = usageMetadata?.promptTokenCount || Math.round(fullPrompt.length / 4);
-        const outputTokens = usageMetadata?.candidatesTokenCount || Math.round(rawResponseText.length / 4);
-        const costUsd = (inputTokens / 1000) * config.ratePer1kInput + (outputTokens / 1000) * config.ratePer1kOutput;
+        const tokensUsed = (usageMetadata?.promptTokenCount || 0) + (usageMetadata?.candidatesTokenCount || 0)
+          || Math.round((request.prompt.length + request.context.length + rawResponseText.length) / 4);
 
+        const costUsd =
+          ((usageMetadata?.promptTokenCount || tokensUsed * 0.7) / 1000) * config.ratePer1kInput +
+          ((usageMetadata?.candidatesTokenCount || tokensUsed * 0.3) / 1000) * config.ratePer1kOutput;
+
+        // PRD §17.2: Record real invocation telemetry
         this.telemetry.recordModelInvocation(tokensUsed, latencyMs, costUsd);
-
-        console.log(
-          `[LLMGateway] LIVE ${config.model} | task=${request.task} | ` +
-          `latency=${latencyMs}ms | tokens=${tokensUsed} | cost=$${costUsd.toFixed(6)} | ` +
-          `attempt=${attempt}/${MAX_RETRIES}`
-        );
 
         return {
           data: parsedData,
           provider: config.provider,
-          model: config.model,
+          model: currentModelName,
           latencyMs,
           tokensUsed,
           costUsd,
           mode: 'live',
           rawResponse: rawResponseText
         };
-
       } catch (error: any) {
         lastError = error;
-        const latencyMs = Date.now() - startTime;
+        const isTransient = error.message?.includes('429') ||
+          error.message?.includes('503') ||
+          error.message?.includes('RESOURCE_EXHAUSTED') ||
+          error.message?.includes('high demand') ||
+          error.message?.includes('quota');
 
-        console.error(
-          `[LLMGateway] Attempt ${attempt}/${MAX_RETRIES} FAILED | task=${request.task} | ` +
-          `latency=${latencyMs}ms | error=${error.message}`
+        console.warn(
+          `[LLMGateway] Attempt ${attempt}/${MAX_RETRIES} failed for task '${request.task}' on model '${currentModelName}': ${error.message}`
         );
 
-        if (attempt < MAX_RETRIES) {
-          const isCapacityOrNetwork = error.message?.includes('503') || error.message?.includes('429') || error.message?.includes('fetch failed');
-          if (!isCapacityOrNetwork) {
-            request.prompt += `\n\n[RETRY ${attempt}] Previous response was invalid: ${error.message}. Please provide a valid JSON response matching the required schema exactly.`;
-          }
-          const delayMs = isCapacityOrNetwork ? (2000 * Math.pow(2, attempt - 1)) : (1000 * attempt);
-          await new Promise(resolve => setTimeout(resolve, delayMs));
+        if (attempt < MAX_RETRIES && isTransient) {
+          await this.backoffDelay(attempt);
+        } else if (!isTransient) {
+          // If non-transient, try fallback model in candidate list
+          await this.backoffDelay(attempt);
         }
       }
     }
 
-    // All retries exhausted — FAIL LOUDLY, never silently degrade
-    const totalLatency = Date.now() - startTime;
-    this.telemetry.recordModelInvocation(0, totalLatency, 0);
-
+    // PRD v3.0 §2.3: Exhausted retries must fail loud, not downgrade to rule-based agents
     throw new Error(
-      `[LLMGateway] ALL ${MAX_RETRIES} ATTEMPTS FAILED for task '${request.task}'. ` +
-      `Last error: ${lastError?.message}. ` +
-      `Last raw response: ${rawResponseText.substring(0, 500)}. ` +
-      `This is a real failure — NOT falling back to rule-based logic.`
+      `[LLMGateway] Real LLM invocation FAILED for task '${request.task}' after ${MAX_RETRIES} attempts. ` +
+      `Last error: ${lastError?.message}. Synthetic fallbacks are forbidden under PRD v3.0 mandate.`
     );
   }
 
-  /**
-   * OFFLINE mode: Deterministic rule-based responses for local development.
-   * This mode exists ONLY for local dev convenience and must NOT be used
-   * in E2E tests or demo scenarios.
-   */
-  private async invokeOffline<T>(
-    request: LLMRequest<T>,
-    config: RoutingConfig,
-    _sanitizedContext: string
-  ): Promise<LLMResponse<T>> {
-    const startTime = Date.now();
-
-    // Simulate realistic latency for offline mode
-    await new Promise(resolve => setTimeout(resolve, 50));
-
-    const latencyMs = Date.now() - startTime;
-    const tokensUsed = Math.round((request.prompt.length + request.context.length) / 4) + 180;
-    const costUsd = (tokensUsed / 1000) * config.ratePer1kInput;
-
-    this.telemetry.recordModelInvocation(tokensUsed, latencyMs, costUsd);
-
-    // Return prompt as-is (the old behavior) — callers handle offline responses
-    let result: any = null;
-    if (request.schema) {
-      result = request.prompt;
-    }
-
-    return {
-      data: result as T,
-      provider: config.provider,
-      model: config.model,
-      latencyMs,
-      tokensUsed,
-      costUsd,
-      mode: 'offline'
-    };
+  private async backoffDelay(attempt: number): Promise<void> {
+    const delay = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
+    await new Promise(resolve => setTimeout(resolve, delay));
   }
 
-  /**
-   * Builds a structured prompt with clear role separation.
-   * Infrastructure telemetry is wrapped as untrusted data per PRD §12.
-   */
+  private cleanJsonResponse(raw: string): string {
+    let text = raw.trim();
+    if (text.startsWith('```json')) {
+      text = text.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (text.startsWith('```')) {
+      text = text.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+    return text.trim();
+  }
+
   private buildPrompt(task: TaskType, userPrompt: string, sanitizedContext: string): string {
     const systemPreamble = this.getSystemPreamble(task);
 
@@ -309,19 +281,19 @@ export class LLMGateway {
   private getSystemPreamble(task: TaskType): string {
     switch (task) {
       case 'classification':
-        return 'You are an SRE incident classifier. Analyze the provided telemetry and classify the incident severity and category. Return structured JSON only.';
+        return 'You are an SRE incident classifier. Analyze the provided telemetry and classify the incident severity and category. Return structured JSON matching the schema.';
       case 'rca':
-        return 'You are an expert SRE root cause analysis agent. Analyze the provided evidence from Kubernetes, Prometheus, and deployment history. Generate ranked hypotheses with confidence scores. Each hypothesis must reference specific evidence IDs. Return structured JSON only.';
+        return 'You are an expert SRE root cause analysis agent. Analyze the provided evidence from Kubernetes, Prometheus, and deployment history. Generate ranked hypotheses with confidence scores. Each hypothesis must reference specific evidence IDs. Return structured JSON matching the schema.';
       case 'remediation_planning':
-        return 'You are an SRE remediation planner. Based on the root cause analysis, propose a specific, safe remediation action. Consider blast radius and risk. Return structured JSON only.';
+        return 'You are an SRE remediation planner. Based on the root cause analysis, propose a specific, safe remediation action. Consider blast radius and risk. Return structured JSON matching the schema.';
       case 'log_summarization':
-        return 'You are a log analysis agent. Summarize the provided log data, identify key patterns and anomalies. Return structured JSON only.';
+        return 'You are a log analysis agent. Summarize the provided log data, identify key patterns and anomalies. Return structured JSON matching the schema.';
       case 'postmortem':
-        return 'You are an SRE postmortem author. Generate a structured incident postmortem from the provided timeline, evidence, and resolution data. Return structured JSON only.';
+        return 'You are an SRE postmortem author. Generate a structured incident postmortem from the provided timeline, evidence, and resolution data. Return structured JSON matching the schema.';
       case 'code_analysis':
-        return 'You are a code analysis agent for SRE. Analyze the provided code changes for potential reliability impacts. Return structured JSON only.';
+        return 'You are a code analysis agent for SRE. Analyze the provided code changes for potential reliability impacts. Return structured JSON matching the schema.';
       default:
-        return 'You are an AI SRE agent. Analyze the provided data and respond with structured JSON.';
+        return 'You are an AI SRE agent. Analyze the provided data and respond with structured JSON matching the schema.';
     }
   }
 }

@@ -1,5 +1,13 @@
 import { PrismaClient, getPrismaClient } from './index.js';
-import type { Incident, IncidentState, IncidentSeverity, NormalizedEvent, EvidenceObject, RemediationProposal } from '@ai-sre/event-schema';
+import {
+  IncidentStateMachine,
+  type Incident,
+  type IncidentState,
+  type IncidentSeverity,
+  type NormalizedEvent,
+  type EvidenceObject,
+  type RemediationProposal
+} from '@ai-sre/event-schema';
 
 export interface CreateIncidentInput {
   tenantId?: string;
@@ -96,6 +104,9 @@ export class PrismaIncidentRepository {
       throw new Error(`Incident ${incidentId} not found`);
     }
 
+    // Enforce FSM transition rules at persistence boundary (PRD §19)
+    IncidentStateMachine.assertTransition(incidentId, current.state as IncidentState, targetState);
+
     const previousState = current.state;
     const now = new Date();
 
@@ -167,11 +178,105 @@ export class PrismaIncidentRepository {
     }
   }
 
+  public async getProposalByIdempotencyKey(key: string): Promise<any | null> {
+    return this.prisma.remediationRecord.findUnique({
+      where: { idempotencyKey: key }
+    });
+  }
+
   public async getProposals(incidentId: string): Promise<any[]> {
     return this.prisma.remediationRecord.findMany({
       where: { incidentId },
       orderBy: { createdAt: 'desc' }
     });
+  }
+
+  public async updateProposalStatus(proposalId: string, status: string): Promise<void> {
+    await this.prisma.remediationRecord.update({
+      where: { id: proposalId },
+      data: { status, updatedAt: new Date() }
+    });
+  }
+
+  public async getEvidenceForIncident(incidentId: string): Promise<EvidenceObject[]> {
+    const records = await this.prisma.evidenceRecord.findMany({
+      where: { incidentId },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    return records.map(r => ({
+      id: r.id,
+      incidentId: r.incidentId,
+      type: r.type as any,
+      source: r.source as any,
+      title: r.title,
+      summary: r.summary,
+      confidence: r.confidence,
+      isContradictory: r.isContradictory,
+      provenance: r.provenance as any,
+      data: (r.data as any) || {}
+    }));
+  }
+
+  public async getTimeline(incidentId: string): Promise<any[]> {
+    const entries = await this.prisma.timelineEntry.findMany({
+      where: { incidentId },
+      orderBy: { timestamp: 'asc' }
+    });
+
+    return entries.map(e => ({
+      id: e.id,
+      incidentId: e.incidentId,
+      timestamp: e.timestamp.toISOString(),
+      type: e.type,
+      title: e.title,
+      description: e.description,
+      data: e.data
+    }));
+  }
+
+  public async addTimelineEntry(incidentId: string, entry: {
+    type: string;
+    title: string;
+    description: string;
+    data?: any;
+  }): Promise<void> {
+    await this.prisma.timelineEntry.create({
+      data: {
+        incidentId,
+        type: entry.type,
+        title: entry.title,
+        description: entry.description,
+        data: entry.data || null
+      }
+    });
+  }
+
+  public async linkEvent(incidentId: string, event: NormalizedEvent): Promise<void> {
+    await this.addTimelineEntry(incidentId, {
+      type: 'EVENT',
+      title: `Correlated Event: ${event.title}`,
+      description: event.description,
+      data: event.payload as any
+    });
+  }
+
+  public async updateIncident(incident: Incident): Promise<Incident> {
+    const updated = await this.prisma.incident.update({
+      where: { id: incident.id },
+      data: {
+        state: incident.state,
+        severity: incident.severity,
+        updatedAt: new Date()
+      },
+      include: {
+        timeline: true,
+        evidence: true,
+        proposals: true
+      }
+    });
+
+    return this.mapToDomainIncident(updated);
   }
 
   public async recordAuditEntry(entry: {
@@ -196,6 +301,39 @@ export class PrismaIncidentRepository {
         metadata: entry.metadata as any
       }
     });
+  }
+
+  public async getAuditTrail(limit = 100): Promise<any[]> {
+    const records = await this.prisma.auditRecord.findMany({
+      orderBy: { timestamp: 'desc' },
+      take: limit
+    });
+
+    return records.map(r => ({
+      id: r.id,
+      timestamp: r.timestamp.toISOString(),
+      tenant: r.tenant,
+      actor: r.actor,
+      action: r.action,
+      target: r.targetResource,
+      targetResource: r.targetResource,
+      payloadHash: r.payloadHash,
+      previousHash: r.previousHash,
+      hash: r.hash,
+      metadata: r.metadata
+    }));
+  }
+
+  /**
+   * Performs a live SELECT 1 database ping to verify PostgreSQL connectivity.
+   */
+  public async ping(): Promise<boolean> {
+    try {
+      const res = await this.prisma.$queryRawUnsafe('SELECT 1 as alive');
+      return Array.isArray(res) && res.length > 0;
+    } catch (err) {
+      return false;
+    }
   }
 
   private mapToDomainIncident(raw: any): Incident {
@@ -229,3 +367,4 @@ export class PrismaIncidentRepository {
     };
   }
 }
+

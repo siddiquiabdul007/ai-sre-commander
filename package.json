@@ -12,7 +12,9 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
-    "test": "node --test tests/unit/**/*.test.js tests/unit/*.test.js || true",
+    "test": "node --env-file=.env --test tests/unit/*.test.js",
+    "test:integration": "node tests/integration/auth-jwks.test.js && node tests/integration/prometheus-live.test.js && node tests/integration/k8s-execution.test.js",
+    "test:e2e": "node tests/e2e/golden-incident-live.test.js",
     "dev:api": "npm --workspace=apps/api run dev",
     "dev:web": "npm --workspace=apps/web run dev",
     "lint": "echo 'Linting passed'"
