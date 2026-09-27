@@ -1,7 +1,8 @@
 # AI SRE Commander — Comprehensive Technical Architecture & Engineering Guide
 
-> **Document Version**: 4.0.0  
-> **Status**: Production Architecture Reference  
+> **Document Version**: 4.1.0  
+> **Status**: Production-oriented AI SRE control-plane prototype, with only the capabilities explicitly demonstrated by current evidence  
+> **Evidence Matrix**: [docs/EVIDENCE_MATRIX.md](file:///Users/ahad/EU%20SAAS/ai-sre-commander/docs/EVIDENCE_MATRIX.md)  
 > **Target Audience**: SRE Directors, Principal Architects, Cloud Platform Engineers, Security Auditors, and Open-Source Contributors
 
 ---
@@ -303,30 +304,30 @@ The platform runs on dedicated Azure cloud infrastructure provisioned via Terraf
 
 ---
 
-## 7. EU Regulatory Compliance Engineering (DORA, NIS2, EU AI Act)
+## 7. EU Regulatory Alignment Engineering (DORA, NIS2, EU AI Act)
 
-AI SRE Commander translates European policy legal requirements into concrete software mechanisms:
+> **Regulatory Notice**: AI SRE Commander implements technical mechanisms aligned with European regulatory objectives. These represent technical controls subject to formal organizational and legal assessment, rather than self-certified legal compliance.
 
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
-│              EUROPEAN UNION DIGITAL COMPLIANCE MATRIX                 │
+│        EUROPEAN UNION DIGITAL COMPLIANCE TECHNICAL ALIGNMENT          │
 ├────────────────────────────────┬──────────────────────────────────────┤
-│ EU REGULATION                  │ SOFTWARE MECHANISM                   │
+│ EU REGULATORY FRAMEWORK        │ TECHNICAL SOFTWARE MECHANISM         │
 ├────────────────────────────────┼──────────────────────────────────────┤
 │ DORA (EU 2022/2554)            │ • Continuous 15s Prometheus scraping │
-│ Digital Operational Resilience │ • Sub-minute MTTR automated rollback │
-│                                │ • 7-Year WORM storage immutability   │
-│                                │ • Automated DORA incident reports    │
+│ Digital Operational Resilience │ • Revision-targeted rollback restore │
+│ Alignment                      │ • Azure WORM immutability (7-yr TTL) │
+│                                │ • Automated incident timeline export │
 ├────────────────────────────────┼──────────────────────────────────────┤
-│ NIS2 (EU 2022/2555)            │ • 24-Hour early warning export       │
+│ NIS2 (EU 2022/2555)            │ • Early warning report generation    │
 │ Essential Entities Security    │ • HMAC-SHA256 webhook signatures     │
-│                                │ • Entra ID RS256 token verification  │
-│                                │ • NFKC prompt injection neutralization│
+│ Alignment                      │ • Entra ID RS256 token verification  │
+│                                │ • NFKC prompt injection defense      │
 ├────────────────────────────────┼──────────────────────────────────────┤
 │ EU AI Act (EU 2024/1689)       │ • Human-in-the-loop approval gate    │
-│ High-Impact AI Governance      │ • Calibrated confidence scoring      │
-│                                │ • Contradictory evidence tracking    │
-│                                │ • SHA-256 prompt & completion audit  │
+│ High-Impact AI Governance      │ • Model-reported confidence tracking │
+│ Alignment                      │ • Contradictory evidence tracking    │
+│                                │ • SHA-256 linear hash chain audit    │
 └────────────────────────────────┴──────────────────────────────────────┘
 ```
 

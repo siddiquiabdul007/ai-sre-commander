@@ -59,6 +59,15 @@ metadata:
   name: sre-reader
   namespace: $NAMESPACE
 ---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sre-reader-token
+  namespace: $NAMESPACE
+  annotations:
+    kubernetes.io/service-account.name: sre-reader
+type: kubernetes.io/service-account-token
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -97,6 +106,15 @@ kind: ServiceAccount
 metadata:
   name: sre-executor
   namespace: $NAMESPACE
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sre-executor-token
+  namespace: $NAMESPACE
+  annotations:
+    kubernetes.io/service-account.name: sre-executor
+type: kubernetes.io/service-account-token
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

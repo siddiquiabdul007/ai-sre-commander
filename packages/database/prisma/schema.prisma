@@ -8,29 +8,39 @@ generator client {
 }
 
 model Incident {
-  id          String   @id @default(uuid())
-  tenantId    String
-  title       String
-  severity    String   // SEV1, SEV2, SEV3
-  service     String
-  environment String
-  cluster     String
-  namespace   String
-  state       String   // DETECTED, TRIAGED, INVESTIGATING, etc.
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id                       String   @id @default(uuid())
+  tenantId                 String
+  title                    String
+  severity                 String   // SEV-1, SEV-2, SEV-3, SEV-4
+  service                  String
+  environment              String
+  cluster                  String
+  namespace                String
+  state                    String   // DETECTED, CORRELATED, PROPOSED, AWAITING_APPROVAL, APPROVED, EXECUTING, VERIFYING, NOT_RECOVERED, UNKNOWN, RESOLVED, POSTMORTEM, etc.
+  version                  Int      @default(1) // Concurrency token for optimistic locking (FR-P0-002)
+  mttdSeconds              Int?
+  mttrSeconds              Int?
+  errorBudgetImpactPercent Float    @default(0)
+  resolvedAt               DateTime?
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
 
-  timeline    TimelineEntry[]
-  evidence    EvidenceRecord[]
-  proposals   RemediationRecord[]
+  timeline             TimelineEntry[]
+  evidence             EvidenceRecord[]
+  proposals            RemediationRecord[]
+  remediationProposals RemediationProposal[]
+  executions           Execution[]
+  verificationRuns     VerificationRun[]
 
-  @@index([tenantId, service])
+  @@index([tenantId, state, createdAt])
+  @@index([tenantId, service, environment])
   @@index([state])
 }
 
 model TimelineEntry {
   id          String   @id @default(uuid())
   incidentId  String
+  tenantId    String   @default("tenant-eu-default")
   incident    Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   type        String
   title       String
@@ -39,11 +49,13 @@ model TimelineEntry {
   timestamp   DateTime @default(now())
 
   @@index([incidentId])
+  @@index([tenantId])
 }
 
 model EvidenceRecord {
   id              String   @id @default(uuid())
   incidentId      String
+  tenantId        String   @default("tenant-eu-default")
   incident        Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
   type            String
   source          String
@@ -56,6 +68,7 @@ model EvidenceRecord {
   createdAt       DateTime @default(now())
 
   @@index([incidentId])
+  @@index([tenantId])
 }
 
 model RemediationRecord {
@@ -75,6 +88,106 @@ model RemediationRecord {
   @@index([idempotencyKey])
 }
 
+model RemediationProposal {
+  id                      String   @id @default(uuid())
+  incidentId              String
+  tenantId                String   @default("tenant-eu-default")
+  incident                Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  action                  String
+  targetResource          String
+  parameters              Json?
+  computedRisk            String   // Canonical deterministic risk (LOW, MEDIUM, HIGH, CRITICAL)
+  modelRisk               String?  // Advisory risk proposed by AI
+  proposalHash            String   // Canonical proposal snapshot hash
+  observedStateHash       String?  // Canonical hash of target K8s state when proposed
+  observedResourceVersion String?  // Target K8s resourceVersion when proposed
+  status                  String   // PROPOSED, PENDING_APPROVAL, APPROVED, REJECTED, EXECUTING, SUCCESS, FAILED, EXPIRED, STALE
+  version                 Int      @default(1)
+  idempotencyKey          String   @unique
+  expiresAt               DateTime?
+  approvedBy              String?
+  approvedAt              DateTime?
+  rejectionReason         String?
+  expectedImpact          String?
+  blastRadius             String?
+  proposedBy              String?
+  reason                  String?
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  approvals  Approval[]
+  executions Execution[]
+
+  @@index([incidentId])
+  @@index([idempotencyKey])
+  @@index([tenantId])
+}
+
+model Approval {
+  id                String              @id @default(uuid())
+  proposalId        String
+  tenantId          String              @default("tenant-eu-default")
+  proposal          RemediationProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  approverSubject   String              // Unique approver identity
+  approverName      String?
+  approverEmail     String?
+  role              String              // Role exercised for approval
+  justificationHash String              // SHA-256 hash of justification
+  justification     String?
+  proposalHash      String              // Snapshot hash bound to this approval
+  approvedAt        DateTime            @default(now())
+
+  @@unique([proposalId, approverSubject])
+  @@index([proposalId])
+  @@index([tenantId])
+}
+
+model Execution {
+  id                String              @id @default(uuid())
+  proposalId        String
+  incidentId        String
+  tenantId          String              @default("tenant-eu-default")
+  proposal          RemediationProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  incident          Incident            @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  idempotencyKey    String              @unique
+  status            String              // PENDING, CLAIMED, EXECUTING, SUCCEEDED, FAILED, UNKNOWN, EXPIRED
+  attempt           Int                 @default(1)
+  claimedBy         String?             // Worker/agent id that holds the lease
+  leaseUntil        DateTime?
+  desiredStateHash  String?
+  observedStateHash String?
+  externalRequestId String?
+  errorCode         String?
+  errorDetails      Json?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+
+  verificationRuns VerificationRun[]
+
+  @@index([incidentId])
+  @@index([proposalId])
+  @@index([tenantId])
+  @@index([idempotencyKey])
+}
+
+model VerificationRun {
+  id           String     @id @default(uuid())
+  incidentId   String
+  executionId  String?
+  tenantId     String     @default("tenant-eu-default")
+  incident     Incident   @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  execution    Execution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+  status       String     // OK, UNKNOWN, NOT_RECOVERED, VERIFIED
+  startTime    DateTime   @default(now())
+  endTime      DateTime?
+  evidenceJson Json?
+  summary      String
+  createdAt    DateTime   @default(now())
+
+  @@index([incidentId])
+  @@index([tenantId])
+}
+
 model AuditRecord {
   id             String   @id @default(uuid())
   timestamp      DateTime @default(now())
@@ -82,6 +195,11 @@ model AuditRecord {
   actor          String
   action         String
   targetResource String
+  proposalHash   String?
+  approvalIds    String?
+  executionId    String?
+  targetUid      String?
+  stateHashes    String?
   payloadHash    String
   previousHash   String
   hash           String

@@ -116,11 +116,16 @@ export class PrometheusClient {
    * Check if Prometheus is reachable and healthy
    */
   public async isHealthy(): Promise<boolean> {
-    try {
-      const res = await fetch(`${this.baseUrl}/-/healthy`, { signal: AbortSignal.timeout(2000) });
-      return res.ok;
-    } catch {
-      return false;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        const res = await fetch(`${this.baseUrl}/-/healthy`, { signal: AbortSignal.timeout(3000) });
+        if (res.ok) return true;
+      } catch {
+        if (attempt < 3) {
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
     }
+    return false;
   }
 }

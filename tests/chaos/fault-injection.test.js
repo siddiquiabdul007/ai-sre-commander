@@ -6,8 +6,8 @@ import { EventNormalizer } from '@ai-sre/event-ingestion';
 import { ExecutionService } from '@ai-sre/execution-service';
 
 describe('PRD §26 Chaos & Fault-Injection Tests: Duplicate Events & Retry Storms', () => {
-  it('collapses an alert storm of 50 duplicate Prometheus alerts into a single incident', () => {
-    const repo = new IncidentRepository();
+  it('collapses an alert storm of 50 duplicate Prometheus alerts into a single incident', async () => {
+    const repo = new IncidentRepository(null);
     const correlation = new CorrelationEngine(repo, 30);
 
     const initialProm = EventNormalizer.normalizePrometheus({
@@ -15,7 +15,7 @@ describe('PRD §26 Chaos & Fault-Injection Tests: Duplicate Events & Retry Storm
       annotations: { summary: 'Memory limit exceeded' }
     });
 
-    const firstResult = correlation.correlate(initialProm);
+    const firstResult = await correlation.correlate(initialProm);
     const incidentId = firstResult.incident.id;
 
     // Simulate storm of 50 rapid duplicate alerts
@@ -24,7 +24,7 @@ describe('PRD §26 Chaos & Fault-Injection Tests: Duplicate Events & Retry Storm
         labels: { alertname: 'HighMemoryUsage', service: 'checkout-api', severity: 'critical' },
         annotations: { summary: `Memory limit exceeded retry #${i}` }
       });
-      const res = correlation.correlate(duplicateAlert);
+      const res = await correlation.correlate(duplicateAlert);
       assert.equal(res.isNewIncident, false);
       assert.equal(res.matchedIncidentId, incidentId);
     }
@@ -35,7 +35,7 @@ describe('PRD §26 Chaos & Fault-Injection Tests: Duplicate Events & Retry Storm
   });
 
   it('safely handles concurrent execution retry attempts with the same idempotency key', async () => {
-    const repo = new IncidentRepository();
+    const repo = new IncidentRepository(null);
     const inc = repo.createIncident({
       title: 'CrashLoop Incident',
       service: 'checkout-api',
@@ -53,9 +53,9 @@ describe('PRD §26 Chaos & Fault-Injection Tests: Duplicate Events & Retry Storm
       action: 'rollback_deployment',
       risk: 'HIGH',
       environment: 'production',
-      namespace: 'payments',
+      namespace: process.env.K8S_NAMESPACE || 'sre-demo',
       targetResource: 'deployment/checkout-api',
-      parameters: { deployment: 'checkout-api', targetRevision: 26 },
+      parameters: { deployment: 'checkout-api', namespace: process.env.K8S_NAMESPACE || 'sre-demo' },
       expectedImpact: 'Rollback',
       blastRadius: 'Single pod',
       status: 'APPROVED',

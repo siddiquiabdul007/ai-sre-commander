@@ -130,7 +130,7 @@ describe('Remediation, Policy Engine, Execution & Verification Tests', () => {
       environment: 'production',
       namespace,
       targetResource: 'deployment/checkout-api',
-      parameters: { deployment: 'checkout-api', targetRevision: 1, namespace },
+      parameters: { deployment: 'checkout-api', namespace },
       expectedImpact: 'Revert to revision 26',
       blastRadius: 'checkout-api only',
       status: 'APPROVED',
@@ -157,7 +157,6 @@ describe('Remediation, Policy Engine, Execution & Verification Tests', () => {
     // 3. Post-execution verification
     const verifService = new VerificationService(repo);
     const verifResult = await verifService.verifyIncidentRecovery(inc.id);
-
     assert.equal(verifResult.verification.verified, true);
     assert.equal(repo.getIncident(inc.id)?.state, 'RESOLVED');
   });

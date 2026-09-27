@@ -256,7 +256,6 @@ async function runGoldenIncidentLive() {
     targetResource: 'deployment/checkout-api',
     parameters: {
       deploymentName: 'checkout-api',
-      targetRevision: 1,
       namespace
     },
     expectedImpact: 'Restore latency < 50ms, eliminate OOM kills',
@@ -286,7 +285,8 @@ async function runGoldenIncidentLive() {
   assert.equal(policyEval.requiresHumanApproval, true, 'Production rollback must require human approval');
 
   // Step 14: Notification sent
-  const notif = await notificationService.notifyApprovalRequired(memoryRepo.getIncident(incidentId), remediationProposal);
+  const targetInc = (await memoryRepo.getIncidentAsync(incidentId)) || memoryRepo.getIncident(incidentId) || dbIncident;
+  const notif = await notificationService.notifyApprovalRequired(targetInc, remediationProposal);
   console.log(`[Step 14] Notification dispatched: '${notif.subject}'`);
 
   // Step 15: Real RS256 JWT Signed for Staff SRE Lead
@@ -355,7 +355,6 @@ async function runGoldenIncidentLive() {
     ...remediationProposal,
     parameters: {
       deploymentName: 'checkout-api',
-      targetRevision: 1,
       namespace
     }
   });
@@ -423,6 +422,7 @@ async function runGoldenIncidentLive() {
   console.log(`╚════════════════════════════════════════════════════════════════════════╝\n`);
 
   await prisma.$disconnect();
+  process.exit(0);
 }
 
 runGoldenIncidentLive().catch((err) => {

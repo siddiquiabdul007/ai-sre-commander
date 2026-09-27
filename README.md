@@ -13,12 +13,24 @@
 ![Gemini](https://img.shields.io/badge/AI%20Model-Gemini%203.8%20Flash-4285F4?logo=google&logoColor=white)
 ![Compliance](https://img.shields.io/badge/Compliance-DORA%20%7C%20NIS2%20%7C%20EU%20AI%20Act-003399?logo=europeanunion&logoColor=white)
 
-**Autonomous Incident Investigation, Remediation & Reliability Control Plane for Cloud-Native Infrastructure**  
-*Built for European Enterprise SaaS, Fintech, and Mission-Critical Workloads on Microsoft Azure & Kubernetes.*
+**Production-oriented AI SRE Control-Plane Prototype for Cloud-Native Infrastructure**  
+*Aligned with European Enterprise SaaS, Fintech, and Mission-Critical Workload Governance on Microsoft Azure & Kubernetes.*
 
-[Engineering Guide](docs/ENGINEERING_GUIDE.md) • [Architecture](#2-system-architecture--workflow) • [EU Compliance](#3-eu-regulatory-governance--compliance-targeting) • [Tech Stack](#4-technology-stack) • [Control Console UI](#5-sre-control-console-ui) • [Security](#6-production-hardened-security-architecture) • [Getting Started](#7-getting-started--local-verification)
+[Evidence Matrix](docs/EVIDENCE_MATRIX.md) • [Engineering Guide](docs/ENGINEERING_GUIDE.md) • [Architecture](#2-system-architecture--workflow) • [EU Governance](#3-eu-regulatory-governance--compliance-targeting) • [Tech Stack](#4-technology-stack) • [Control Console UI](#5-sre-control-console-ui) • [Security](#6-production-hardened-security-architecture) • [Getting Started](#7-getting-started--local-verification)
 
 </div>
+
+---
+
+## 0. Product & Safety Contract Status (PRD Compliance)
+
+Per the **Production Safety, Reliability & Governance PRD**, this repository operates under an explicit documentation contract distinguishing verified capabilities from target architecture:
+
+- **Evidence Mapping**: Every material security, reliability, and governance claim maps to an executable automated test and live infrastructure artifact in [EVIDENCE_MATRIX.md](docs/EVIDENCE_MATRIX.md).
+- **Architecture Maturity Split**:
+  - **Implemented & Verified (P0 & P1 Gates)**: Authoritative PostgreSQL incident persistence, transactional state transitions with version tokens, durable exactly-one-claim execution protocol with leases, scoped Kubernetes credentials (no fallback), full `PodTemplateSpec` revision rollback, deterministic policy engine, multi-party quorum, SHA-256 immutable proposal hashing, and fail-closed Prometheus verification.
+  - **Partially Implemented**: Real-time WebSocket streaming, advanced multi-region tenant sharding.
+  - **Target Architecture**: Cross-cluster autonomous mesh routing, formal third-party DORA/NIS2/EU AI Act legal certifications.
 
 ---
 
@@ -32,7 +44,7 @@ Modern enterprise Kubernetes environments generate gigabytes of fragmented opera
 
 ### The Solution: AI SRE Commander
 
-**AI SRE Commander** is a production-hardened reliability control plane that ingests heterogeneous raw events, builds temporal and causal dependency graphs, conducts multi-agent hypothesis tournaments using Google Gemini, evaluates actions through deterministic policy gates, and executes verified rollbacks against live Kubernetes clusters.
+**AI SRE Commander** is a production-oriented AI SRE control-plane prototype that ingests heterogeneous raw events, builds temporal and causal dependency graphs, conducts multi-agent hypothesis tournaments using Google Gemini, evaluates actions through deterministic policy gates, and executes verified rollbacks against live Kubernetes clusters.
 
 ```
 DETECT ➔ CORRELATE ➔ INVESTIGATE ➔ EXPLAIN ➔ RECOMMEND ➔ APPROVE ➔ EXECUTE ➔ VERIFY ➔ DOCUMENT
@@ -41,9 +53,10 @@ DETECT ➔ CORRELATE ➔ INVESTIGATE ➔ EXPLAIN ➔ RECOMMEND ➔ APPROVE ➔ E
 ### Core Design Principles
 
 - **Strict Separation of Reasoning and Execution**: Large Language Models reason over correlated evidence and formulate ranked hypotheses. Deterministic, cryptographically signed policy engines and human SRE operators authorize mutations.
-- **Inspectable Causal Tournament**: Every AI conclusion delivers calibrated confidence percentages, explicit supporting evidence, and contradictory evidence checks.
+- **Inspectable Causal Tournament**: Every AI conclusion delivers model-reported confidence (pending empirical calibration and validation), explicit supporting evidence, and contradictory evidence checks.
 - **Zero Mock / Real-Adapter Architecture**: The control plane interfaces directly with Azure Kubernetes Service (`aks-aisre-prod`), Azure PostgreSQL Flexible Server, in-cluster Prometheus, Azure Blob WORM storage, and Microsoft Entra ID.
-- **Cryptographic Immutability**: All decisions, operator justifications, AI prompts, and execution hashes are permanently recorded in a SHA-256 tamper-evident ledger stored on immutable WORM blob containers.
+- **Cryptographic Immutability**: All decisions, operator justifications, AI prompts, and execution hashes are permanently recorded in a SHA-256 linear hash chain stored on immutable WORM blob containers.
+- **Revision-Targeted Template Restoration**: Rollbacks restore the complete intended PodTemplateSpec without synthesizing hybrid revisions.
 
 ---
 

@@ -63,6 +63,8 @@ resource "azurerm_kubernetes_cluster" "aks" {
   resource_group_name = azurerm_resource_group.sre_rg.name
   dns_prefix          = "aks-${var.prefix}-${var.environment}"
 
+  oidc_issuer_enabled = true
+
   default_node_pool {
     name           = "systempool"
     node_count     = var.aks_node_count
@@ -171,6 +173,7 @@ resource "azurerm_postgresql_flexible_server" "pg" {
   administrator_password = random_password.pg_admin.result
   storage_mb             = 32768
   sku_name               = var.postgres_sku
+  zone                   = "1"
   backup_retention_days  = 7
   public_network_access_enabled = true
 

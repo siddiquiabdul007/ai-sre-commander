@@ -1,0 +1,303 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: checkout-api-code
+  namespace: sre-demo
+data:
+  server.js: |
+    import http from 'node:http';
+    import { randomUUID } from 'node:crypto';
+
+    let leakBuffers = [];
+    let chaosMode = process.env.CHAOS_MODE || 'none';
+    let requestCount = 0;
+    let errorCount = 0;
+
+    const server = http.createServer((req, res) => {
+      const url = new URL(req.url, `http://${req.headers.host}`);
+      requestCount++;
+
+      // 1. Health check
+      if (url.pathname === '/health' || url.pathname === '/') {
+        const memMb = Math.round(process.memoryUsage().rss / (1024 * 1024));
+        if (chaosMode === 'unhealthy') {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          return res.end(JSON.stringify({ status: 'UNHEALTHY', version: process.env.APP_VERSION, memMb }));
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          status: 'UP',
+          service: 'checkout-api',
+          version: process.env.APP_VERSION || 'v1.0.0',
+          chaosMode,
+          memMb,
+          requestCount,
+          errorCount
+        }));
+      }
+
+      // 2. Metrics endpoint (Prometheus format)
+      if (url.pathname === '/metrics') {
+        const mem = process.memoryUsage();
+        const output = [
+          '# HELP http_requests_total Total HTTP requests',
+          '# TYPE http_requests_total counter',
+          `http_requests_total{status="200",handler="checkout"} ${requestCount - errorCount}`,
+          `http_requests_total{status="500",handler="checkout"} ${errorCount}`,
+          '# HELP process_resident_memory_bytes Resident memory size in bytes',
+          '# TYPE process_resident_memory_bytes gauge',
+          `process_resident_memory_bytes ${mem.rss}`,
+          '# HELP nodejs_heap_size_total_bytes Total heap size',
+          '# TYPE nodejs_heap_size_total_bytes gauge',
+          `nodejs_heap_size_total_bytes ${mem.heapTotal}`,
+          `nodejs_heap_size_used_bytes ${mem.heapUsed}`
+        ].join('\n');
+        res.writeHead(200, { 'Content-Type': 'text/plain; version=0.0.4' });
+        return res.end(output);
+      }
+
+      // 3. Chaos Injection Endpoint
+      if (url.pathname === '/api/chaos/inject' && req.method === 'POST') {
+        let body = '';
+        req.on('data', chunk => { body += chunk; });
+        req.on('end', () => {
+          try {
+            const payload = JSON.parse(body || '{}');
+            chaosMode = payload.mode || 'memory_leak';
+            console.log(`[Chaos] Chaos mode dynamically activated: ${chaosMode}`);
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, chaosMode }));
+          } catch (e) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+        return;
+      }
+
+      // 4. Chaos Reset Endpoint
+      if (url.pathname === '/api/chaos/reset') {
+        chaosMode = 'none';
+        leakBuffers = [];
+        console.log('[Chaos] Chaos reset to healthy state');
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({ success: true, chaosMode: 'none', memCleared: true }));
+      }
+
+      // 5. Checkout Business API
+      if (url.pathname === '/api/checkout') {
+        if (chaosMode === 'error_spike' || process.env.APP_VERSION === 'v1.1.0-buggy') {
+          // 80% error rate
+          if (Math.random() < 0.8) {
+            errorCount++;
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+              error: 'Database connection pool exhausted',
+              code: 'POOL_EXHAUSTED',
+              version: process.env.APP_VERSION || 'v1.1.0-buggy'
+            }));
+          }
+        }
+
+        if (chaosMode === 'memory_leak' || process.env.APP_VERSION === 'v1.1.0-leak') {
+          // Allocate 20MB uncollected buffer per request
+          const chunk = Buffer.alloc(20 * 1024 * 1024, 0xAA);
+          leakBuffers.push(chunk);
+          const currentRssMb = Math.round(process.memoryUsage().rss / (1024 * 1024));
+          console.log(`[MemoryLeak] Leaked 20MB! Current RSS: ${currentRssMb}MB (Buffers: ${leakBuffers.length})`);
+        }
+
+        if (chaosMode === 'latency_spike') {
+          setTimeout(() => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ orderId: `ord-${randomUUID().substring(0, 8)}`, status: 'CONFIRMED' }));
+          }, 2500);
+          return;
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+          orderId: `ord-${randomUUID().substring(0, 8)}`,
+          status: 'CONFIRMED',
+          version: process.env.APP_VERSION || 'v1.0.0',
+          timestamp: new Date().toISOString()
+        }));
+      }
+
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Not found' }));
+    });
+
+    const port = Number(process.env.PORT) || 80;
+    server.listen(port, '0.0.0.0', () => {
+      console.log(`[CheckoutAPI] Live microservice running on port ${port} (version: ${process.env.APP_VERSION || 'v1.0.0'})`);
+    });
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: traffic-generator-code
+  namespace: sre-demo
+data:
+  traffic-gen.js: |
+    import http from 'node:http';
+
+    const targetUrl = process.env.TARGET_URL || 'http://checkout-api.sre-demo.svc.cluster.local/api/checkout';
+    const rps = Number(process.env.RPS) || 10;
+    const intervalMs = Math.round(1000 / rps);
+
+    let total = 0;
+    let successes = 0;
+    let errors = 0;
+    let latencies = [];
+
+    console.log(`[TrafficGenerator] Starting live Azure traffic to ${targetUrl} at ${rps} req/sec`);
+
+    function sendRequest() {
+      const t0 = Date.now();
+      const req = http.get(targetUrl, (res) => {
+        const lat = Date.now() - t0;
+        latencies.push(lat);
+        total++;
+        if (res.statusCode >= 200 && res.statusCode < 400) {
+          successes++;
+        } else {
+          errors++;
+        }
+        res.resume();
+      });
+
+      req.on('error', () => {
+        total++;
+        errors++;
+      });
+
+      req.setTimeout(3000, () => {
+        req.destroy();
+      });
+    }
+
+    setInterval(sendRequest, intervalMs);
+
+    setInterval(() => {
+      const recentTotal = total;
+      const recentSuccess = successes;
+      const recentErrors = errors;
+      const avgLat = latencies.length > 0 ? Math.round(latencies.reduce((a, b) => a + b, 0) / latencies.length) : 0;
+      const errorRate = recentTotal > 0 ? ((recentErrors / recentTotal) * 100).toFixed(1) : '0.0';
+      
+      console.log(`[LiveTraffic] Total: ${recentTotal} | 200 OK: ${recentSuccess} | 5xx Errors: ${recentErrors} (${errorRate}%) | Avg Latency: ${avgLat}ms`);
+      
+      total = 0;
+      successes = 0;
+      errors = 0;
+      latencies = [];
+    }, 5000);
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkout-api
+  namespace: sre-demo
+  labels:
+    app: checkout-api
+    version: v1.0.0
+  annotations:
+    kubernetes.io/change-cause: "Initial healthy deployment v1.0.0 (Live Node.js microservice)"
+spec:
+  replicas: 2
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: checkout-api
+  template:
+    metadata:
+      labels:
+        app: checkout-api
+        version: v1.0.0
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "80"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: checkout-api
+        image: node:22-alpine
+        command: ["node", "/app/server.js"]
+        ports:
+        - name: http
+          containerPort: 80
+        env:
+        - name: PORT
+          value: "80"
+        - name: APP_VERSION
+          value: "v1.0.0"
+        - name: CHAOS_MODE
+          value: "none"
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 512Mi
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 3
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: app-code
+        configMap:
+          name: checkout-api-code
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: traffic-generator
+  namespace: sre-demo
+  labels:
+    app: traffic-generator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: traffic-generator
+  template:
+    metadata:
+      labels:
+        app: traffic-generator
+    spec:
+      containers:
+      - name: traffic-gen
+        image: node:22-alpine
+        command: ["node", "/app/traffic-gen.js"]
+        env:
+        - name: TARGET_URL
+          value: "http://checkout-api.sre-demo.svc.cluster.local/api/checkout"
+        - name: RPS
+          value: "10"
+        resources:
+          requests:
+            cpu: 20m
+            memory: 32Mi
+          limits:
+            cpu: 50m
+            memory: 64Mi
+        volumeMounts:
+        - name: gen-code
+          mountPath: /app
+      volumes:
+      - name: gen-code
+        configMap:
+          name: traffic-generator-code

@@ -89,7 +89,7 @@ export class LLMGateway {
       case 'postmortem':
         return {
           provider: 'Google',
-          model: process.env.GEMINI_REASONING_MODEL || 'gemini-3.8-flash',
+          model: process.env.GEMINI_REASONING_MODEL || 'gemini-3.1-flash-lite',
           tier: 'strong_reasoning',
           reason: 'High-complexity causal synthesis requiring deep reasoning, multi-signal correlation, and schema adherence.',
           ratePer1kInput: 0.00015,
@@ -101,7 +101,7 @@ export class LLMGateway {
       default:
         return {
           provider: 'Google',
-          model: process.env.GEMINI_FAST_MODEL || 'gemini-3.5-flash-lite',
+          model: process.env.GEMINI_FAST_MODEL || 'gemini-3.1-flash-lite',
           tier: 'fast_low_cost',
           reason: 'High-throughput signal filtering, anomaly classification, and low-latency structured extraction.',
           ratePer1kInput: 0.000075,
@@ -146,8 +146,9 @@ export class LLMGateway {
     // Candidate models in preference order for tier resilience
     const candidateModels = [
       config.model,
-      'gemini-3.5-flash-lite',
-      'gemini-3.6-flash'
+      'gemini-3.1-flash-lite',
+      'gemini-3-flash-preview',
+      'gemini-3.8-flash'
     ];
 
     for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
@@ -229,10 +230,10 @@ export class LLMGateway {
         );
 
         if (attempt < MAX_RETRIES && isTransient) {
-          await this.backoffDelay(attempt);
+          await this.backoffDelay(attempt, error.message);
         } else if (!isTransient) {
           // If non-transient, try fallback model in candidate list
-          await this.backoffDelay(attempt);
+          await this.backoffDelay(attempt, error.message);
         }
       }
     }
@@ -244,8 +245,16 @@ export class LLMGateway {
     );
   }
 
-  private async backoffDelay(attempt: number): Promise<void> {
-    const delay = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
+  private async backoffDelay(attempt: number, errorMessage?: string): Promise<void> {
+    let delay = Math.min(1000 * Math.pow(2, attempt - 1), 4000);
+    if (errorMessage) {
+      const match = errorMessage.match(/retry in ([0-9.]+)s/i) || errorMessage.match(/"retryDelay":"(\d+)s"/i);
+      if (match) {
+        const seconds = Math.min(65, Math.ceil(parseFloat(match[1])));
+        delay = (seconds + 1) * 1000;
+        console.log(`[LLMGateway] Rate limit backoff: waiting ${delay / 1000}s per upstream API instruction...`);
+      }
+    }
     await new Promise(resolve => setTimeout(resolve, delay));
   }
 

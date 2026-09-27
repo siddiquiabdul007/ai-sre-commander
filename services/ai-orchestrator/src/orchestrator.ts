@@ -35,10 +35,13 @@ export class AIOrchestrator {
   }
 
   public async runInvestigation(incidentId: string): Promise<InvestigationResult> {
-    const incident = await this.incidentRepo.getIncident(incidentId);
+    const incident = await (this.incidentRepo.getIncidentAsync
+      ? this.incidentRepo.getIncidentAsync(incidentId)
+      : this.incidentRepo.getIncident(incidentId));
     if (!incident) {
       throw new Error(`Incident ${incidentId} not found`);
     }
+
 
     // 1. Transition state machine to INVESTIGATING
     if (incident.state === 'DETECTED' || incident.state === 'TRIAGED') {

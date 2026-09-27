@@ -40,7 +40,7 @@ describe('Incident Engine & Event Ingestion Tests', () => {
   });
 
   it('enforces PRD §19 10-state incident lifecycle and rejects illegal transitions', () => {
-    const repo = new IncidentRepository();
+    const repo = new IncidentRepository(null);
     const inc = repo.createIncident({
       title: 'Checkout API Latency Spike',
       service: 'checkout-api',
@@ -75,8 +75,9 @@ describe('Incident Engine & Event Ingestion Tests', () => {
   });
 
   it('correlates temporal signals from deployment to alert into single incident', async () => {
-    const repo = new IncidentRepository();
+    const repo = new IncidentRepository(null);
     const correlationEngine = new CorrelationEngine(repo, 30);
+
 
     // 14:20 Deployment
     const ghEvent = EventNormalizer.normalizeGitHub({
