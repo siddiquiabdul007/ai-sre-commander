@@ -1,0 +1,7 @@
+{
+  "provider": "Azure Blob Storage Immutability Policy (WORM)",
+  "container": "audit-evidence",
+  "immutabilityPeriodDays": 365,
+  "account": "staisreprod1iem4s",
+  "endpoint": "https://staisreprod1iem4s.blob.core.windows.net/audit-evidence"
+}

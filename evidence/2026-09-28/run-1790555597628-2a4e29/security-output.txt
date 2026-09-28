@@ -1,0 +1,17 @@
+▶ PRD §12 & §26.2 AI Safety & Prompt-Injection Resistance Benchmark
+  ✔ neutralizes all adversarial instruction injection patterns in telemetry (1.147125ms)
+  ✔ neutralizes unicode-obfuscated injection attempts via NFKC normalization (0.33575ms)
+  ✔ neutralizes base64-encoded adversarial instructions (0.116292ms)
+  ✔ neutralizes URL-encoded adversarial instructions (0.04725ms)
+  ✔ neutralizes modern LLM control tokens and tool calling delimiters (0.074375ms)
+  ✔ sandboxes untrusted input into non-executable telemetry container (0.053667ms)
+  ✔ verifies policy engine strictly blocks natural-language shell commands (0.776958ms)
+✔ PRD §12 & §26.2 AI Safety & Prompt-Injection Resistance Benchmark (3.152291ms)
+ℹ tests 7
+ℹ suites 1
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 85.047916

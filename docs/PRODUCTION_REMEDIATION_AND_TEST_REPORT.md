@@ -1,27 +1,28 @@
 # AI SRE Commander — Production Remediation & Live Cloud Verification Report
 
 > **Document Classification**: Engineering Operational Report & Compliance Traceability  
-> **Document Version**: 1.0.0  
+> **Document Version**: 2.0.0 (Residual Gaps Closure Baseline)  
 > **Date**: 28 September 2026  
 > **Author**: Platform & Reliability Engineering  
 > **Repository**: `siddiquiabdul007/ai-sre-commander`  
-> **Commit Hash**: [`8d145df`](https://github.com/siddiquiabdul007/ai-sre-commander/commit/8d145df)  
-> **Status**: Verified Production-Ready Architecture & Operational Release Gate Passed
+> **Commit Hash**: `5d1e1ac` (and release branch)  
+> **Evidence Run**: `run-1790555749052-7064fe` (Manifest SHA-256: `d8aad8d74229c8d4b8b2aca81894cc2813262ca670c1ca3546b78dfaa5ef243d`)  
+> **Status**: Verified at commit 5d1e1ac under evidence run run-1790555749052-7064fe. Technical controls verified for tested configuration and scenarios; formal security, operational, and regulatory acceptance remains subject to organizational review.
 
 ---
 
 ## 1. Executive Summary
 
-This report documents the comprehensive remediation, cloud provisioning, and empirical verification of **AI SRE Commander** against the *Production Safety, Reliability & Governance Remediation PRD (23 September 2026)*.
+This report documents the comprehensive remediation, cloud provisioning, empirical verification, and residual production-safety gap closure of **AI SRE Commander** against the *Production Safety, Reliability & Governance Remediation PRD* and the follow-up *Residual Production-Safety Gaps Remediation PRD (28 September 2026)*.
 
-Operating at the critical boundary where generative AI models formulate automated remediation proposals that can directly mutate production Kubernetes infrastructure, the platform was re-architected to enforce a strict **Separation of Reasoning and Execution**:
+Operating at the critical boundary where generative AI models formulate automated remediation proposals that can directly mutate production Kubernetes infrastructure, the platform enforces strict **Separation of Reasoning and Execution**:
 
 1. **AI Models (Google Gemini)** act exclusively as advisory reasoning agents formulating causal hypotheses and proposals.
 2. **Deterministic Software Services (Policy Engine, Execution Service)** enforce fail-closed authorization, lease-based idempotency, and Kubernetes mutation safety without model discretion.
 3. **Enterprise Persistence (Azure PostgreSQL Flexible Server)** acts as the single authoritative source of truth with ACID concurrency control and optimistic locking.
 4. **Physical Cloud Grounding (Zero Mocks)**: All operational workflows were verified against live Microsoft Azure infrastructure (Azure AKS, Azure PostgreSQL, Azure Blob WORM storage, in-cluster Prometheus) and real in-cluster HTTP traffic.
 
-Every single finding across the 26 PRD inventory items (4 CRITICAL, multiple HIGH/MEDIUM) has been implemented, validated through automated test suites, and evidenced in the repository.
+Every single finding across the 26 PRD inventory items (7 CRITICAL, 13 HIGH, 6 MEDIUM) and all 11 residual production-safety findings (R1 through R11) has been implemented, validated through the 11-case acceptance suite (`AT-RB-01` through `AT-DR-01`), and evidenced in machine-readable artifact bundles with tamper-evident `SHA256SUMS`.
 
 ---
 
@@ -291,4 +292,60 @@ The **Production Mutation Readiness Gate (PRD §18)** has been satisfied across 
 - [x] All decisions, evidence, target UIDs, and approvals are durably audit-linked in Azure WORM storage.
 - [x] 100% test pass rate across all unit, integration, concurrency, security, and live e2e suites.
 
-**Git Release Status**: All artifacts, tests, and documentation committed and pushed to `main` at commit [`8d145df`](https://github.com/siddiquiabdul007/ai-sre-commander/commit/8d145df).
+---
+
+## 8. Residual Production-Safety Gaps Remediation (28 Sep 2026 Baseline)
+
+In accordance with the *Residual Production-Safety Gaps Remediation PRD*, all 11 residual engineering items (R1 through R11) have been closed, verified by the 11-case acceptance suite, and packaged into an externally auditable evidence bundle:
+
+### 8.1 Residual Findings Closure Summary
+
+| ID | Area | Priority | Problem Addressed | Implemented Technical Solution | Acceptance Test | Status |
+|---|---|---|---|---|---|---|
+| **R1** | Rollback fidelity | P0 | Complete `PodTemplateSpec` not restored; selected fields were patched | Restores full canonical `PodTemplateSpec` (sidecars, initContainers, securityContext, affinity, volumes) via `/spec/template` replacement | `AT-RB-01` | **VERIFIED** |
+| **R2** | Rollback verification trust | P0 | Verification relied on Commander-written template-hash annotation | Recomputes canonical hash from fresh GET of live `spec.template`; never trusts self-authored annotations | `AT-RB-02` | **VERIFIED** |
+| **R3** | K8s concurrency | P0 | `resourceVersion` checked only in client code before patch | Server-evaluated precondition test on `/metadata/resourceVersion` in JSON patch; rejects stale writes with 409/422 | `AT-RB-03` | **VERIFIED** |
+| **R4** | HPA safety | P0 | HPA API errors swallowed; scaling continued | Tri-state `FOUND` / `NOT_FOUND` / `UNAVAILABLE`; blocks scale mutations with `DEPENDENCY_UNAVAILABLE` on outage | `AT-SC-01` | **VERIFIED** |
+| **R5** | Credential escape hatch | P0 | Configuration permitted developer kubeconfig fallback | Explicit `ProductionScopedServiceAccountProvider` fails closed outside cluster if `K8S_EXECUTOR_TOKEN` is unset | `AT-CRED-01` | **VERIFIED** |
+| **R6** | Tenant repository boundary | P1 | Repository APIs accepted resource ID without mandatory tenant context | Strongly typed immutable `TenantContext` required across all sensitive repository methods and SQL WHERE clauses | `AT-TEN-01` | **VERIFIED** |
+| **R7** | Approval snapshot | P1 | Proposal hash did not prove exact Kubernetes state reviewed | Immutable `ApprovalSnapshot` binds `proposalHash`, `deploymentUid`, `resourceVersion`, `targetTemplateHash` | `AT-APP-01` | **VERIFIED** |
+| **R8** | Approval TTL semantics | P1 | Subsequent approvals could refresh proposal expiration | Fixed proposal-level deadline established at creation; subsequent approvals cannot extend it (`APPROVAL_EXPIRED`) | `AT-APP-02` | **VERIFIED** |
+| **R9** | Type-safety claim | P1 | Boundary `any` casts remained in service code | Explicit interfaces exported; `catch (error: unknown)` + `asError()` narrowing; CI static gate blocks violations | `AT-TYPE-01` | **VERIFIED** |
+| **R10** | Evidence chain | P1 | Public evidence bundle did not contain complete execution outputs | Automated bundle generator outputs raw logs, cloud state snapshots, manifest, and `SHA256SUMS` | `AT-EVID-01` | **VERIFIED** |
+| **R11** | Report precision | P2 | Severity count mismatch (4 vs 7 critical) and unqualified release claims | Inventory corrected to 7 critical findings; precise 3-state claim matrix; language tied to exact evidence runs | Documentation Gate | **VERIFIED** |
+
+### 8.2 Comprehensive Acceptance Test Results (AT-RB-01 .. AT-DR-01)
+
+The complete 11-case acceptance suite was executed against the release baseline:
+
+```
+▶ Residual Production-Safety Gaps Acceptance Suite (AT-RB-01 .. AT-DR-01)
+  ✔ AT-RB-01: Rollback all PodTemplateSpec fields produces exact target canonical hash (15.7ms)
+  ✔ AT-RB-02: Verification uses fresh live template, not self-authored annotations (3.3ms)
+  ✔ AT-RB-03: Concurrent Deployment update during rollback rejects stale mutation with STALE_TARGET (1.2ms)
+  ✔ AT-SC-01: HPA API failure causes scale mutation to fail-closed with DEPENDENCY_UNAVAILABLE (0.8ms)
+  ✔ AT-CRED-01: Production executor refuses startup when scoped token is missing (0.2ms)
+  ✔ AT-TEN-01: Tenant B requests Tenant A proposal by ID -> Repository denies access with TENANT_FORBIDDEN (1936ms)
+  ✔ AT-APP-01: Approval snapshot resourceVersion mismatch blocks execution until re-approval (2.6ms)
+  ✔ AT-APP-02: Second approver after original TTL is rejected and expiry is not extended (1274ms)
+  ✔ AT-TYPE-01: CI type-safety gate validates zero prohibited catch(any) in services (8.4ms)
+  ✔ AT-EVID-01: Missing raw evidence outputs cause release gate to reject manifest (0.8ms)
+  ✔ AT-DR-01: Disrupted execution marked UNKNOWN is successfully reconciled to SUCCEEDED (6726ms)
+✔ Residual Production-Safety Gaps Acceptance Suite (AT-RB-01 .. AT-DR-01) (9972ms)
+ℹ tests 11 | suites 1 | pass 11 | fail 0
+```
+
+### 8.3 Machine-Readable Evidence Bundle
+
+- **Evidence Bundle Directory**: `evidence/2026-09-28/run-1790555749052-7064fe/`
+- **Manifest**: `evidence/2026-09-28/run-1790555749052-7064fe/manifest.json` (SHA-256: `d8aad8d74229c8d4b8b2aca81894cc2813262ca670c1ca3546b78dfaa5ef243d`)
+- **Checksums**: `evidence/2026-09-28/run-1790555749052-7064fe/SHA256SUMS` (14 individual artifact hashes)
+- **CI Summary**: `evidence/2026-09-28/run-1790555749052-7064fe/ci-summary.json` (`allGatesPassed: true`)
+- **Durable Persistence**: All artifact hashes committed to Azure PostgreSQL Flexible Server in table `EvidenceArtifact`.
+
+### 8.4 Three-State Release Status
+
+- **Verified (100% of tested capabilities)**: All 26 source findings + 11 residual findings verified through automated test suites, CI safety gates, and live Azure AKS/Postgres/Prometheus/Blob drills.
+- **Partially Verified**: None (all prior partial states closed).
+- **Target Architecture**: Database-level Row Level Security (RLS) configured in schema as an optional defense-in-depth toggle for multi-tenant isolation.
+

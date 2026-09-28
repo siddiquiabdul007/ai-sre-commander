@@ -1,0 +1,22 @@
+▶ Residual Production-Safety Gaps Acceptance Suite (AT-RB-01 .. AT-DR-01)
+  ✔ AT-RB-01: Rollback all PodTemplateSpec fields produces exact target canonical hash (3.305167ms)
+  ✔ AT-RB-02: Verification uses fresh live template, not self-authored annotations (3.271542ms)
+  ✔ AT-RB-03: Concurrent Deployment update during rollback rejects stale mutation with STALE_TARGET (1.106ms)
+  ✔ AT-SC-01: HPA API failure causes scale mutation to fail-closed with DEPENDENCY_UNAVAILABLE (0.882959ms)
+  ✔ AT-CRED-01: Production executor refuses startup when scoped token is missing (0.223375ms)
+  ✔ AT-TEN-01: Tenant B requests Tenant A proposal by ID -> Repository denies access with TENANT_FORBIDDEN (1801.851625ms)
+  ✔ AT-APP-01: Approval snapshot resourceVersion mismatch blocks execution until re-approval (3.129208ms)
+  ✔ AT-APP-02: Second approver after original TTL is rejected and expiry is not extended (1088.708541ms)
+[ExecutionService] Initialized in LIVE mode with sre-executor role (workerId: worker-10154-6a4f80ce).
+  ✔ AT-TYPE-01: CI type-safety gate validates zero prohibited catch(any) in services (4.047167ms)
+  ✔ AT-EVID-01: Missing raw evidence outputs cause release gate to reject manifest (0.46825ms)
+  ✔ AT-DR-01: Disrupted execution marked UNKNOWN is successfully reconciled to SUCCEEDED (6249.540916ms)
+✔ Residual Production-Safety Gaps Acceptance Suite (AT-RB-01 .. AT-DR-01) (9158.727667ms)
+ℹ tests 11
+ℹ suites 1
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 9510.671042

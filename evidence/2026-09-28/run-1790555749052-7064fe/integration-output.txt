@@ -1,0 +1,67 @@
+=== Stage 7 Verification: Entra ID Real JWKS & Cryptographic JWT Validation ===
+
+Tenant ID: d43b9062-c9ab-4d7d-98e9-605b4e69c8b3
+Client ID: 46cec45b-968b-42eb-ad50-4176cca056f3
+JWKS URI: https://login.microsoftonline.com/d43b9062-c9ab-4d7d-98e9-605b4e69c8b3/discovery/v2.0/keys
+
+--- Test 1: Microsoft Entra ID JWKS Endpoint Live Discovery ---
+✓ Live JWKS endpoint reached: discovered 5 active Microsoft RS256 signing keys
+
+--- Test 2: Live Microsoft Entra ID RS256 Token Verification ---
+✓ Live token cryptographically verified against Microsoft JWKS:
+  User: Abdul Ahad Siddiqui <abdulahadsiddiqui888@gmail.com> (id: 7ab34ec9-7fbc-480b-8fc4-1f14ac34166e)
+  Tenant: d43b9062-c9ab-4d7d-98e9-605b4e69c8b3
+  Mapped Roles: sre
+  Token Issuer: https://sts.windows.net/d43b9062-c9ab-4d7d-98e9-605b4e69c8b3/
+
+--- Test 3: Cryptographic Rejection of Tampered Token ---
+✓ Tampered token rejected: Token verification failed: signature verification failed
+
+--- Test 4: Rejection of Missing and Malformed Authorization Headers ---
+✓ Missing header rejected: Authentication required: missing Authorization header.
+✓ Malformed header rejected: Authentication required: invalid Authorization header format. Expected Bearer <token>.
+✓ Garbage token rejected: Token verification failed: JWS Protected Header is invalid
+
+--- Test 5: Role Mapping Determinism ---
+✓ Roles mapped properly across all security personas
+
+========================================
+Stage 7 Results: 5 PASSED, 0 FAILED
+========================================
+
+=== Stage 6 Verification: Prometheus Live Queries & Evidence ===
+
+Prometheus URL: http://127.0.0.1:9090
+
+[ObservabilityAgent] LIVE mode — connected to Prometheus at http://127.0.0.1:9090
+--- Test 1: Prometheus Endpoint Health ---
+✓ Prometheus server is UP and healthy
+
+--- Test 2: Live PromQL Queries ---
+✓ 'up' query returned 13 metric series in 121ms
+  - job=prometheus-kube-prometheus-prometheus, instance=10.100.1.19:8080, value=1
+  - job=coredns, instance=10.100.1.29:9153, value=1
+  - job=kubelet, instance=10.100.1.4:10250, value=1
+✓ 'container_memory_working_set_bytes' returned 4 pod series
+  - pod=checkout-api-695685b4b4-s5j2j: 13.7 MB
+  - pod=checkout-api-695685b4b4-6l8l6: 15.7 MB
+  - pod=checkout-api-87b68dd4-2ldxl: 13.0 MB
+  - pod=checkout-api-87b68dd4-w6tp7: 6.5 MB
+
+--- Test 3: Observability Agent Evidence Gathering ---
+[ObservabilityAgent] LIVE investigation: gathered 1 evidence items for checkout-api
+✓ Agent gathered 1 evidence object(s) from live telemetry
+  - [BASELINE_DEVIATION] Container Memory Working Set: 13MB avg (conf: 85%)
+    Summary: Memory working set across 4 pod(s) of 'checkout-api' in 'sre-demo': avg 13MB, peak 16MB.
+    Provenance: http://127.0.0.1:9090 | Query: container_memory_working_set_bytes{container="checkout-api",namespace="sre-demo"}
+    UntrustedInputHash: 5bd69fc977c52533
+
+--- Test 4: Resilience to Non-existent Metrics & Gaps ---
+✓ Non-existent metric query returned empty array gracefully: count=0
+[ObservabilityAgent] LIVE investigation: gathered 0 evidence items for service-with-no-metrics
+✓ Agent gracefully handled missing metric series without throwing: count=0
+
+========================================
+Stage 6 Results: 4 PASSED, 0 FAILED
+========================================
+

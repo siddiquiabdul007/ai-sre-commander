@@ -1,0 +1,16 @@
+▶ PRD §12 Concurrency, Quorum & Tenant Security Gates
+  ✔ FR-P0-004: 100 concurrent execution claims with same key produce exactly 1 active claim (1592.897542ms)
+  ✔ FR-P1-003: 20 concurrent approvals for one proposal produce exactly one accepted terminal transition (3087.625334ms)
+  ✔ FR-P1-004: Two approvals from the same identity cannot satisfy a 2-person quorum (703.772458ms)
+  ✔ FR-P1-005: Modifying parameters invalidates proposal hash and blocks approval (283.452666ms)
+  ✔ FR-P1-006: Approval after TTL expiration is rejected (205.237417ms)
+  ✔ FR-P1-007: Cross-tenant isolation blocks Tenant B from accessing or approving Tenant A resources (872.61175ms)
+✔ PRD §12 Concurrency, Quorum & Tenant Security Gates (7842.224334ms)
+ℹ tests 6
+ℹ suites 1
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 7942.044125

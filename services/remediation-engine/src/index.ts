@@ -71,13 +71,21 @@ export class RemediationEngine {
     const proposalHash = this.computeProposalHash(proposal);
     proposal.proposalHash = proposalHash;
 
-    const expiresAt = new Date(Date.now() + RemediationEngine.DEFAULT_APPROVAL_TTL_MS).toISOString();
-    proposal.expiresAt = expiresAt;
+    // R8: Fixed proposal-level deadline established at proposal creation; approvals cannot extend it!
+    if (!proposal.expiresAt) {
+      proposal.expiresAt = new Date(Date.now() + RemediationEngine.DEFAULT_APPROVAL_TTL_MS).toISOString();
+    }
+    const expiresAtMs = new Date(proposal.expiresAt).getTime();
+    if (Date.now() >= expiresAtMs) {
+      const err = new Error(`Approval rejected: proposal ${proposalId} has expired`);
+      (err as any).code = 'APPROVAL_EXPIRED';
+      throw err;
+    }
 
     let quorumSatisfied = true;
     let distinctApproversCount = 1;
 
-    // 4. FR-P1-004: Transactional DB quorum approval if repo supports it
+    // 4. FR-P1-004 & R7: Transactional DB quorum approval if repo supports it
     if (typeof (this.incidentRepo as any).addApproval === 'function') {
       const approvalResult = await (this.incidentRepo as any).addApproval(proposalId, {
         approverSubject: approver.id || approver.email,
@@ -86,6 +94,11 @@ export class RemediationEngine {
         role: approver.roles[0] || 'sre',
         justification: justification || `Approved action ${proposal.action} for ${proposal.targetResource}.`,
         proposalHash,
+        snapshotHash: (proposal as any).snapshotHash || proposalHash,
+        deploymentUid: (proposal as any).parameters?.deploymentUid || (proposal as any).deploymentUid,
+        resourceVersion: (proposal as any).parameters?.resourceVersion || (proposal as any).resourceVersion,
+        targetReplicaSetUid: (proposal as any).parameters?.targetReplicaSetUid || (proposal as any).targetReplicaSetUid,
+        targetTemplateHash: (proposal as any).parameters?.targetTemplateHash || (proposal as any).targetTemplateHash,
         tenantId: incident.tenantId,
         requiredQuorum: policyResult.requiredQuorum
       });

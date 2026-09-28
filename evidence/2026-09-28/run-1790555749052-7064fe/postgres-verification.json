@@ -1,0 +1,11 @@
+{
+  "serverVersion": [
+    {
+      "version": "PostgreSQL 16.15 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 13.2.0, 64-bit"
+    }
+  ],
+  "incidentCount": 134,
+  "proposalCount": 67,
+  "executionCount": 12,
+  "status": "HEALTHY"
+}

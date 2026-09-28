@@ -1,0 +1,22 @@
+Commit: 5d1e1ace21414bd9bdfe272b0cb380360c855511
+Branch: main
+Timestamp: 2026-09-28T00:35:49.052Z
+
+Recent Log:
+5d1e1ac docs: add comprehensive production remediation and live cloud test report
+8d145df feat: complete PRD production remediation, live Azure AKS traffic workload, and verification gates
+a5e1a63 docs(readme): embed full suite of 20 production screenshots and empirical proofs with professional descriptions
+
+Worktree Status:
+M package.json
+ M packages/database/prisma/schema.prisma
+ M packages/database/src/repository.ts
+ M packages/event-schema/src/index.ts
+ M scripts/lint.sh
+ M services/execution-service/src/index.ts
+ M services/execution-service/src/k8s-client.ts
+ M services/remediation-engine/src/index.ts
+?? evidence/
+?? packages/event-schema/src/template-canonicalizer.ts
+?? scripts/generate-evidence-bundle.js
+?? tests/integration/residual-safety.test.js

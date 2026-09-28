@@ -1,0 +1,2825 @@
+{
+  "deployment": {
+    "apiVersion": "apps/v1",
+    "kind": "Deployment",
+    "metadata": {
+      "annotations": {
+        "deployment.kubernetes.io/revision": "36",
+        "kubectl.kubernetes.io/last-applied-configuration": "{\"apiVersion\":\"apps/v1\",\"kind\":\"Deployment\",\"metadata\":{\"annotations\":{\"kubernetes.io/change-cause\":\"Initial healthy deployment v1.0.0 (Live Node.js microservice)\"},\"labels\":{\"app\":\"checkout-api\",\"version\":\"v1.0.0\"},\"name\":\"checkout-api\",\"namespace\":\"sre-demo\"},\"spec\":{\"replicas\":2,\"revisionHistoryLimit\":10,\"selector\":{\"matchLabels\":{\"app\":\"checkout-api\"}},\"template\":{\"metadata\":{\"annotations\":{\"prometheus.io/path\":\"/metrics\",\"prometheus.io/port\":\"80\",\"prometheus.io/scrape\":\"true\"},\"labels\":{\"app\":\"checkout-api\",\"version\":\"v1.0.0\"}},\"spec\":{\"containers\":[{\"command\":[\"node\",\"/app/server.js\"],\"env\":[{\"name\":\"PORT\",\"value\":\"80\"},{\"name\":\"APP_VERSION\",\"value\":\"v1.0.0\"},{\"name\":\"CHAOS_MODE\",\"value\":\"none\"}],\"image\":\"node:22-alpine\",\"livenessProbe\":{\"httpGet\":{\"path\":\"/health\",\"port\":80},\"initialDelaySeconds\":5,\"periodSeconds\":10},\"name\":\"checkout-api\",\"ports\":[{\"containerPort\":80,\"name\":\"http\"}],\"readinessProbe\":{\"httpGet\":{\"path\":\"/health\",\"port\":80},\"initialDelaySeconds\":3,\"periodSeconds\":5},\"resources\":{\"limits\":{\"cpu\":\"200m\",\"memory\":\"512Mi\"},\"requests\":{\"cpu\":\"50m\",\"memory\":\"64Mi\"}},\"volumeMounts\":[{\"mountPath\":\"/app\",\"name\":\"app-code\"}]}],\"volumes\":[{\"configMap\":{\"name\":\"checkout-api-code\"},\"name\":\"app-code\"}]}}}}\n",
+        "kubernetes.io/change-cause": "Rollback to revision 34 (template hash: ba563015b4e9) via AI SRE Commander"
+      },
+      "creationTimestamp": "2026-09-27T11:46:30Z",
+      "generation": 38,
+      "labels": {
+        "app": "checkout-api",
+        "version": "v1.0.0"
+      },
+      "name": "checkout-api",
+      "namespace": "sre-demo",
+      "resourceVersion": "193879",
+      "uid": "5e030b7e-a143-4939-9df4-bedd83102f3b"
+    },
+    "spec": {
+      "progressDeadlineSeconds": 600,
+      "replicas": 2,
+      "revisionHistoryLimit": 10,
+      "selector": {
+        "matchLabels": {
+          "app": "checkout-api"
+        }
+      },
+      "strategy": {
+        "rollingUpdate": {
+          "maxSurge": "25%",
+          "maxUnavailable": "25%"
+        },
+        "type": "RollingUpdate"
+      },
+      "template": {
+        "metadata": {
+          "annotations": {
+            "ai-sre-commander/rollback-time": "2026-09-28T00:19:20.001Z",
+            "ai-sre-commander/target-revision": "34",
+            "ai-sre-commander/template-hash": "ba563015b4e9d98ce56b74f07f077f5c6a1e3bc7ef41cf2ea53fd80eb83f9b07",
+            "prometheus.io/path": "/metrics",
+            "prometheus.io/port": "80",
+            "prometheus.io/scrape": "true"
+          },
+          "labels": {
+            "app": "checkout-api",
+            "version": "v1.0.0"
+          }
+        },
+        "spec": {
+          "containers": [
+            {
+              "command": [
+                "node",
+                "/app/server.js"
+              ],
+              "env": [
+                {
+                  "name": "PORT",
+                  "value": "80"
+                },
+                {
+                  "name": "APP_VERSION",
+                  "value": "v1.0.0"
+                },
+                {
+                  "name": "CHAOS_MODE",
+                  "value": "none"
+                }
+              ],
+              "image": "node:22-alpine",
+              "imagePullPolicy": "IfNotPresent",
+              "livenessProbe": {
+                "failureThreshold": 3,
+                "httpGet": {
+                  "path": "/health",
+                  "port": 80,
+                  "scheme": "HTTP"
+                },
+                "initialDelaySeconds": 5,
+                "periodSeconds": 10,
+                "successThreshold": 1,
+                "timeoutSeconds": 1
+              },
+              "name": "checkout-api",
+              "ports": [
+                {
+                  "containerPort": 80,
+                  "name": "http",
+                  "protocol": "TCP"
+                }
+              ],
+              "readinessProbe": {
+                "failureThreshold": 3,
+                "httpGet": {
+                  "path": "/health",
+                  "port": 80,
+                  "scheme": "HTTP"
+                },
+                "initialDelaySeconds": 3,
+                "periodSeconds": 5,
+                "successThreshold": 1,
+                "timeoutSeconds": 1
+              },
+              "resources": {
+                "limits": {
+                  "cpu": "200m",
+                  "memory": "512Mi"
+                },
+                "requests": {
+                  "cpu": "50m",
+                  "memory": "64Mi"
+                }
+              },
+              "terminationMessagePath": "/dev/termination-log",
+              "terminationMessagePolicy": "File",
+              "volumeMounts": [
+                {
+                  "mountPath": "/app",
+                  "name": "app-code"
+                }
+              ]
+            }
+          ],
+          "dnsPolicy": "ClusterFirst",
+          "restartPolicy": "Always",
+          "schedulerName": "default-scheduler",
+          "securityContext": {},
+          "terminationGracePeriodSeconds": 30,
+          "volumes": [
+            {
+              "configMap": {
+                "defaultMode": 420,
+                "name": "checkout-api-code"
+              },
+              "name": "app-code"
+            }
+          ]
+        }
+      }
+    },
+    "status": {
+      "availableReplicas": 2,
+      "conditions": [
+        {
+          "lastTransitionTime": "2026-09-27T11:46:42Z",
+          "lastUpdateTime": "2026-09-27T11:46:42Z",
+          "message": "Deployment has minimum availability.",
+          "reason": "MinimumReplicasAvailable",
+          "status": "True",
+          "type": "Available"
+        },
+        {
+          "lastTransitionTime": "2026-09-27T11:46:30Z",
+          "lastUpdateTime": "2026-09-28T00:19:34Z",
+          "message": "ReplicaSet \"checkout-api-6466cfbc67\" has successfully progressed.",
+          "reason": "NewReplicaSetAvailable",
+          "status": "True",
+          "type": "Progressing"
+        }
+      ],
+      "observedGeneration": 38,
+      "readyReplicas": 2,
+      "replicas": 2,
+      "terminatingReplicas": 0,
+      "updatedReplicas": 2
+    }
+  },
+  "replicaSets": {
+    "apiVersion": "v1",
+    "items": [
+      {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "metadata": {
+          "annotations": {
+            "deployment.kubernetes.io/desired-replicas": "2",
+            "deployment.kubernetes.io/max-replicas": "3",
+            "deployment.kubernetes.io/revision": "32",
+            "kubernetes.io/change-cause": "Rollback to revision 30 (template hash: 94ea890275c4) via AI SRE Commander"
+          },
+          "creationTimestamp": "2026-09-27T16:22:35Z",
+          "generation": 4,
+          "labels": {
+            "app": "checkout-api",
+            "pod-template-hash": "575648fdd6",
+            "version": "v1.0.0"
+          },
+          "name": "checkout-api-575648fdd6",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "Deployment",
+              "name": "checkout-api",
+              "uid": "5e030b7e-a143-4939-9df4-bedd83102f3b"
+            }
+          ],
+          "resourceVersion": "99794",
+          "uid": "603b4dff-b73d-4f2d-aa1f-737a56d65e09"
+        },
+        "spec": {
+          "replicas": 0,
+          "selector": {
+            "matchLabels": {
+              "app": "checkout-api",
+              "pod-template-hash": "575648fdd6"
+            }
+          },
+          "template": {
+            "metadata": {
+              "annotations": {
+                "ai-sre-commander/rollback-time": "2026-09-27T16:22:35.203Z",
+                "ai-sre-commander/target-revision": "30",
+                "ai-sre-commander/template-hash": "94ea890275c47db14a4bcbcdccb79b67f2d06cffa27232144899630869cbd3dc",
+                "prometheus.io/path": "/metrics",
+                "prometheus.io/port": "80",
+                "prometheus.io/scrape": "true"
+              },
+              "labels": {
+                "app": "checkout-api",
+                "pod-template-hash": "575648fdd6",
+                "version": "v1.0.0"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "command": [
+                    "node",
+                    "/app/server.js"
+                  ],
+                  "env": [
+                    {
+                      "name": "PORT",
+                      "value": "80"
+                    },
+                    {
+                      "name": "APP_VERSION",
+                      "value": "v1.0.0"
+                    },
+                    {
+                      "name": "CHAOS_MODE",
+                      "value": "none"
+                    }
+                  ],
+                  "image": "node:22-alpine",
+                  "imagePullPolicy": "IfNotPresent",
+                  "livenessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 5,
+                    "periodSeconds": 10,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "name": "checkout-api",
+                  "ports": [
+                    {
+                      "containerPort": 80,
+                      "name": "http",
+                      "protocol": "TCP"
+                    }
+                  ],
+                  "readinessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 3,
+                    "periodSeconds": 5,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "resources": {
+                    "limits": {
+                      "cpu": "200m",
+                      "memory": "512Mi"
+                    },
+                    "requests": {
+                      "cpu": "50m",
+                      "memory": "64Mi"
+                    }
+                  },
+                  "terminationMessagePath": "/dev/termination-log",
+                  "terminationMessagePolicy": "File",
+                  "volumeMounts": [
+                    {
+                      "mountPath": "/app",
+                      "name": "app-code"
+                    }
+                  ]
+                }
+              ],
+              "dnsPolicy": "ClusterFirst",
+              "restartPolicy": "Always",
+              "schedulerName": "default-scheduler",
+              "securityContext": {},
+              "terminationGracePeriodSeconds": 30,
+              "volumes": [
+                {
+                  "configMap": {
+                    "defaultMode": 420,
+                    "name": "checkout-api-code"
+                  },
+                  "name": "app-code"
+                }
+              ]
+            }
+          }
+        },
+        "status": {
+          "observedGeneration": 4,
+          "replicas": 0,
+          "terminatingReplicas": 0
+        }
+      },
+      {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "metadata": {
+          "annotations": {
+            "deployment.kubernetes.io/desired-replicas": "2",
+            "deployment.kubernetes.io/max-replicas": "3",
+            "deployment.kubernetes.io/revision": "31",
+            "kubernetes.io/change-cause": "Rollback to revision 28 (template hash: 18d06e6459d5) via AI SRE Commander"
+          },
+          "creationTimestamp": "2026-09-27T16:19:45Z",
+          "generation": 4,
+          "labels": {
+            "app": "checkout-api",
+            "pod-template-hash": "58df4b7b86",
+            "version": "v1.0.0"
+          },
+          "name": "checkout-api-58df4b7b86",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "Deployment",
+              "name": "checkout-api",
+              "uid": "5e030b7e-a143-4939-9df4-bedd83102f3b"
+            }
+          ],
+          "resourceVersion": "75071",
+          "uid": "f43b96f7-1da3-443f-bda5-3d1b3c0511cb"
+        },
+        "spec": {
+          "replicas": 0,
+          "selector": {
+            "matchLabels": {
+              "app": "checkout-api",
+              "pod-template-hash": "58df4b7b86"
+            }
+          },
+          "template": {
+            "metadata": {
+              "annotations": {
+                "ai-sre-commander/rollback-time": "2026-09-27T16:17:59.806Z",
+                "ai-sre-commander/target-revision": "28",
+                "ai-sre-commander/template-hash": "18d06e6459d527f269d88d07409258cef8e4cc190ff0a82f421fdaf0910a22a4",
+                "prometheus.io/path": "/metrics",
+                "prometheus.io/port": "80",
+                "prometheus.io/scrape": "true"
+              },
+              "labels": {
+                "app": "checkout-api",
+                "pod-template-hash": "58df4b7b86",
+                "version": "v1.0.0"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "command": [
+                    "node",
+                    "/app/server.js"
+                  ],
+                  "env": [
+                    {
+                      "name": "PORT",
+                      "value": "80"
+                    },
+                    {
+                      "name": "APP_VERSION",
+                      "value": "v1.1.0-buggy"
+                    },
+                    {
+                      "name": "CHAOS_MODE",
+                      "value": "error_spike"
+                    }
+                  ],
+                  "image": "node:22-alpine",
+                  "imagePullPolicy": "IfNotPresent",
+                  "livenessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 5,
+                    "periodSeconds": 10,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "name": "checkout-api",
+                  "ports": [
+                    {
+                      "containerPort": 80,
+                      "name": "http",
+                      "protocol": "TCP"
+                    }
+                  ],
+                  "readinessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 3,
+                    "periodSeconds": 5,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "resources": {
+                    "limits": {
+                      "cpu": "200m",
+                      "memory": "512Mi"
+                    },
+                    "requests": {
+                      "cpu": "50m",
+                      "memory": "64Mi"
+                    }
+                  },
+                  "terminationMessagePath": "/dev/termination-log",
+                  "terminationMessagePolicy": "File",
+                  "volumeMounts": [
+                    {
+                      "mountPath": "/app",
+                      "name": "app-code"
+                    }
+                  ]
+                }
+              ],
+              "dnsPolicy": "ClusterFirst",
+              "restartPolicy": "Always",
+              "schedulerName": "default-scheduler",
+              "securityContext": {},
+              "terminationGracePeriodSeconds": 30,
+              "volumes": [
+                {
+                  "configMap": {
+                    "defaultMode": 420,
+                    "name": "checkout-api-code"
+                  },
+                  "name": "app-code"
+                }
+              ]
+            }
+          }
+        },
+        "status": {
+          "observedGeneration": 4,
+          "replicas": 0,
+          "terminatingReplicas": 0
+        }
+      },
+      {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "metadata": {
+          "annotations": {
+            "deployment.kubernetes.io/desired-replicas": "2",
+            "deployment.kubernetes.io/max-replicas": "3",
+            "deployment.kubernetes.io/revision": "35",
+            "kubernetes.io/change-cause": "Rollback to revision 33 (template hash: 3d6d3e543e7f) via AI SRE Commander"
+          },
+          "creationTimestamp": "2026-09-27T18:05:47Z",
+          "generation": 4,
+          "labels": {
+            "app": "checkout-api",
+            "pod-template-hash": "5bf8696847",
+            "version": "v1.0.0"
+          },
+          "name": "checkout-api-5bf8696847",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "Deployment",
+              "name": "checkout-api",
+              "uid": "5e030b7e-a143-4939-9df4-bedd83102f3b"
+            }
+          ],
+          "resourceVersion": "193878",
+          "uid": "2422b615-e119-4549-8385-b1b63928f944"
+        },
+        "spec": {
+          "replicas": 0,
+          "selector": {
+            "matchLabels": {
+              "app": "checkout-api",
+              "pod-template-hash": "5bf8696847"
+            }
+          },
+          "template": {
+            "metadata": {
+              "annotations": {
+                "ai-sre-commander/rollback-time": "2026-09-27T18:05:46.676Z",
+                "ai-sre-commander/target-revision": "33",
+                "ai-sre-commander/template-hash": "3d6d3e543e7feb06e8910df244fb9fa67577a729c414984963b1ed3098b0ef49",
+                "prometheus.io/path": "/metrics",
+                "prometheus.io/port": "80",
+                "prometheus.io/scrape": "true"
+              },
+              "labels": {
+                "app": "checkout-api",
+                "pod-template-hash": "5bf8696847",
+                "version": "v1.0.0"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "command": [
+                    "node",
+                    "/app/server.js"
+                  ],
+                  "env": [
+                    {
+                      "name": "PORT",
+                      "value": "80"
+                    },
+                    {
+                      "name": "APP_VERSION",
+                      "value": "v1.1.0-buggy"
+                    },
+                    {
+                      "name": "CHAOS_MODE",
+                      "value": "error_spike"
+                    }
+                  ],
+                  "image": "node:22-alpine",
+                  "imagePullPolicy": "IfNotPresent",
+                  "livenessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 5,
+                    "periodSeconds": 10,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "name": "checkout-api",
+                  "ports": [
+                    {
+                      "containerPort": 80,
+                      "name": "http",
+                      "protocol": "TCP"
+                    }
+                  ],
+                  "readinessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 3,
+                    "periodSeconds": 5,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "resources": {
+                    "limits": {
+                      "cpu": "200m",
+                      "memory": "512Mi"
+                    },
+                    "requests": {
+                      "cpu": "50m",
+                      "memory": "64Mi"
+                    }
+                  },
+                  "terminationMessagePath": "/dev/termination-log",
+                  "terminationMessagePolicy": "File",
+                  "volumeMounts": [
+                    {
+                      "mountPath": "/app",
+                      "name": "app-code"
+                    }
+                  ]
+                }
+              ],
+              "dnsPolicy": "ClusterFirst",
+              "restartPolicy": "Always",
+              "schedulerName": "default-scheduler",
+              "securityContext": {},
+              "terminationGracePeriodSeconds": 30,
+              "volumes": [
+                {
+                  "configMap": {
+                    "defaultMode": 420,
+                    "name": "checkout-api-code"
+                  },
+                  "name": "app-code"
+                }
+              ]
+            }
+          }
+        },
+        "status": {
+          "observedGeneration": 4,
+          "replicas": 0,
+          "terminatingReplicas": 0
+        }
+      },
+      {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "metadata": {
+          "annotations": {
+            "deployment.kubernetes.io/desired-replicas": "2",
+            "deployment.kubernetes.io/max-replicas": "3",
+            "deployment.kubernetes.io/revision": "30",
+            "kubernetes.io/change-cause": "Rollback to revision 28 (template hash: 18d06e6459d5) via AI SRE Commander"
+          },
+          "creationTimestamp": "2026-09-27T16:18:00Z",
+          "generation": 4,
+          "labels": {
+            "app": "checkout-api",
+            "pod-template-hash": "645bb6db85",
+            "version": "v1.0.0"
+          },
+          "name": "checkout-api-645bb6db85",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "Deployment",
+              "name": "checkout-api",
+              "uid": "5e030b7e-a143-4939-9df4-bedd83102f3b"
+            }
+          ],
+          "resourceVersion": "74290",
+          "uid": "27f1ab17-7e2a-4655-aead-d6d80098709e"
+        },
+        "spec": {
+          "replicas": 0,
+          "selector": {
+            "matchLabels": {
+              "app": "checkout-api",
+              "pod-template-hash": "645bb6db85"
+            }
+          },
+          "template": {
+            "metadata": {
+              "annotations": {
+                "ai-sre-commander/rollback-time": "2026-09-27T16:17:59.806Z",
+                "ai-sre-commander/target-revision": "28",
+                "ai-sre-commander/template-hash": "18d06e6459d527f269d88d07409258cef8e4cc190ff0a82f421fdaf0910a22a4",
+                "prometheus.io/path": "/metrics",
+                "prometheus.io/port": "80",
+                "prometheus.io/scrape": "true"
+              },
+              "labels": {
+                "app": "checkout-api",
+                "pod-template-hash": "645bb6db85",
+                "version": "v1.0.0"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "command": [
+                    "node",
+                    "/app/server.js"
+                  ],
+                  "env": [
+                    {
+                      "name": "PORT",
+                      "value": "80"
+                    },
+                    {
+                      "name": "APP_VERSION",
+                      "value": "v1.0.0"
+                    },
+                    {
+                      "name": "CHAOS_MODE",
+                      "value": "none"
+                    }
+                  ],
+                  "image": "node:22-alpine",
+                  "imagePullPolicy": "IfNotPresent",
+                  "livenessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 5,
+                    "periodSeconds": 10,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "name": "checkout-api",
+                  "ports": [
+                    {
+                      "containerPort": 80,
+                      "name": "http",
+                      "protocol": "TCP"
+                    }
+                  ],
+                  "readinessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 3,
+                    "periodSeconds": 5,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "resources": {
+                    "limits": {
+                      "cpu": "200m",
+                      "memory": "512Mi"
+                    },
+                    "requests": {
+                      "cpu": "50m",
+                      "memory": "64Mi"
+                    }
+                  },
+                  "terminationMessagePath": "/dev/termination-log",
+                  "terminationMessagePolicy": "File",
+                  "volumeMounts": [
+                    {
+                      "mountPath": "/app",
+                      "name": "app-code"
+                    }
+                  ]
+                }
+              ],
+              "dnsPolicy": "ClusterFirst",
+              "restartPolicy": "Always",
+              "schedulerName": "default-scheduler",
+              "securityContext": {},
+              "terminationGracePeriodSeconds": 30,
+              "volumes": [
+                {
+                  "configMap": {
+                    "defaultMode": 420,
+                    "name": "checkout-api-code"
+                  },
+                  "name": "app-code"
+                }
+              ]
+            }
+          }
+        },
+        "status": {
+          "observedGeneration": 4,
+          "replicas": 0,
+          "terminatingReplicas": 0
+        }
+      },
+      {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "metadata": {
+          "annotations": {
+            "deployment.kubernetes.io/desired-replicas": "2",
+            "deployment.kubernetes.io/max-replicas": "3",
+            "deployment.kubernetes.io/revision": "36",
+            "kubernetes.io/change-cause": "Rollback to revision 34 (template hash: ba563015b4e9) via AI SRE Commander"
+          },
+          "creationTimestamp": "2026-09-28T00:19:20Z",
+          "generation": 2,
+          "labels": {
+            "app": "checkout-api",
+            "pod-template-hash": "6466cfbc67",
+            "version": "v1.0.0"
+          },
+          "name": "checkout-api-6466cfbc67",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "Deployment",
+              "name": "checkout-api",
+              "uid": "5e030b7e-a143-4939-9df4-bedd83102f3b"
+            }
+          ],
+          "resourceVersion": "193733",
+          "uid": "460a43cc-f15a-4529-8859-a35081bc7489"
+        },
+        "spec": {
+          "replicas": 2,
+          "selector": {
+            "matchLabels": {
+              "app": "checkout-api",
+              "pod-template-hash": "6466cfbc67"
+            }
+          },
+          "template": {
+            "metadata": {
+              "annotations": {
+                "ai-sre-commander/rollback-time": "2026-09-28T00:19:20.001Z",
+                "ai-sre-commander/target-revision": "34",
+                "ai-sre-commander/template-hash": "ba563015b4e9d98ce56b74f07f077f5c6a1e3bc7ef41cf2ea53fd80eb83f9b07",
+                "prometheus.io/path": "/metrics",
+                "prometheus.io/port": "80",
+                "prometheus.io/scrape": "true"
+              },
+              "labels": {
+                "app": "checkout-api",
+                "pod-template-hash": "6466cfbc67",
+                "version": "v1.0.0"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "command": [
+                    "node",
+                    "/app/server.js"
+                  ],
+                  "env": [
+                    {
+                      "name": "PORT",
+                      "value": "80"
+                    },
+                    {
+                      "name": "APP_VERSION",
+                      "value": "v1.0.0"
+                    },
+                    {
+                      "name": "CHAOS_MODE",
+                      "value": "none"
+                    }
+                  ],
+                  "image": "node:22-alpine",
+                  "imagePullPolicy": "IfNotPresent",
+                  "livenessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 5,
+                    "periodSeconds": 10,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "name": "checkout-api",
+                  "ports": [
+                    {
+                      "containerPort": 80,
+                      "name": "http",
+                      "protocol": "TCP"
+                    }
+                  ],
+                  "readinessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 3,
+                    "periodSeconds": 5,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "resources": {
+                    "limits": {
+                      "cpu": "200m",
+                      "memory": "512Mi"
+                    },
+                    "requests": {
+                      "cpu": "50m",
+                      "memory": "64Mi"
+                    }
+                  },
+                  "terminationMessagePath": "/dev/termination-log",
+                  "terminationMessagePolicy": "File",
+                  "volumeMounts": [
+                    {
+                      "mountPath": "/app",
+                      "name": "app-code"
+                    }
+                  ]
+                }
+              ],
+              "dnsPolicy": "ClusterFirst",
+              "restartPolicy": "Always",
+              "schedulerName": "default-scheduler",
+              "securityContext": {},
+              "terminationGracePeriodSeconds": 30,
+              "volumes": [
+                {
+                  "configMap": {
+                    "defaultMode": 420,
+                    "name": "checkout-api-code"
+                  },
+                  "name": "app-code"
+                }
+              ]
+            }
+          }
+        },
+        "status": {
+          "availableReplicas": 2,
+          "fullyLabeledReplicas": 2,
+          "observedGeneration": 2,
+          "readyReplicas": 2,
+          "replicas": 2,
+          "terminatingReplicas": 0
+        }
+      },
+      {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "metadata": {
+          "annotations": {
+            "deployment.kubernetes.io/desired-replicas": "2",
+            "deployment.kubernetes.io/max-replicas": "3",
+            "deployment.kubernetes.io/revision": "28",
+            "kubernetes.io/change-cause": "Initial healthy deployment v1.0.0 (Live Node.js microservice)"
+          },
+          "creationTimestamp": "2026-09-27T16:15:50Z",
+          "generation": 4,
+          "labels": {
+            "app": "checkout-api",
+            "pod-template-hash": "6c5b75dc6c",
+            "version": "v1.0.0"
+          },
+          "name": "checkout-api-6c5b75dc6c",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "Deployment",
+              "name": "checkout-api",
+              "uid": "5e030b7e-a143-4939-9df4-bedd83102f3b"
+            }
+          ],
+          "resourceVersion": "73326",
+          "uid": "2d767a25-d9a9-41d0-b5fe-4b252fe959f4"
+        },
+        "spec": {
+          "replicas": 0,
+          "selector": {
+            "matchLabels": {
+              "app": "checkout-api",
+              "pod-template-hash": "6c5b75dc6c"
+            }
+          },
+          "template": {
+            "metadata": {
+              "annotations": {
+                "ai-sre-commander/rollback-time": "2026-09-27T13:04:47.866Z",
+                "ai-sre-commander/target-revision": "25",
+                "ai-sre-commander/template-hash": "64e06b1b00073ffc68ce68eeb2ae3104193a5b3e0db0c1957e54519151706f36",
+                "prometheus.io/path": "/metrics",
+                "prometheus.io/port": "80",
+                "prometheus.io/scrape": "true"
+              },
+              "labels": {
+                "app": "checkout-api",
+                "pod-template-hash": "6c5b75dc6c",
+                "version": "v1.0.0"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "command": [
+                    "node",
+                    "/app/server.js"
+                  ],
+                  "env": [
+                    {
+                      "name": "PORT",
+                      "value": "80"
+                    },
+                    {
+                      "name": "APP_VERSION",
+                      "value": "v1.0.0"
+                    },
+                    {
+                      "name": "CHAOS_MODE",
+                      "value": "none"
+                    }
+                  ],
+                  "image": "node:22-alpine",
+                  "imagePullPolicy": "IfNotPresent",
+                  "livenessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 5,
+                    "periodSeconds": 10,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "name": "checkout-api",
+                  "ports": [
+                    {
+                      "containerPort": 80,
+                      "name": "http",
+                      "protocol": "TCP"
+                    }
+                  ],
+                  "readinessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 3,
+                    "periodSeconds": 5,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "resources": {
+                    "limits": {
+                      "cpu": "200m",
+                      "memory": "512Mi"
+                    },
+                    "requests": {
+                      "cpu": "50m",
+                      "memory": "64Mi"
+                    }
+                  },
+                  "terminationMessagePath": "/dev/termination-log",
+                  "terminationMessagePolicy": "File",
+                  "volumeMounts": [
+                    {
+                      "mountPath": "/app",
+                      "name": "app-code"
+                    }
+                  ]
+                }
+              ],
+              "dnsPolicy": "ClusterFirst",
+              "restartPolicy": "Always",
+              "schedulerName": "default-scheduler",
+              "securityContext": {},
+              "terminationGracePeriodSeconds": 30,
+              "volumes": [
+                {
+                  "configMap": {
+                    "defaultMode": 420,
+                    "name": "checkout-api-code"
+                  },
+                  "name": "app-code"
+                }
+              ]
+            }
+          }
+        },
+        "status": {
+          "observedGeneration": 4,
+          "replicas": 0,
+          "terminatingReplicas": 0
+        }
+      },
+      {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "metadata": {
+          "annotations": {
+            "deployment.kubernetes.io/desired-replicas": "2",
+            "deployment.kubernetes.io/max-replicas": "3",
+            "deployment.kubernetes.io/revision": "29",
+            "kubernetes.io/change-cause": "Initial healthy deployment v1.0.0 (Live Node.js microservice)"
+          },
+          "creationTimestamp": "2026-09-27T16:16:33Z",
+          "generation": 4,
+          "labels": {
+            "app": "checkout-api",
+            "pod-template-hash": "6d6ff44b5b",
+            "version": "v1.0.0"
+          },
+          "name": "checkout-api-6d6ff44b5b",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "Deployment",
+              "name": "checkout-api",
+              "uid": "5e030b7e-a143-4939-9df4-bedd83102f3b"
+            }
+          ],
+          "resourceVersion": "73768",
+          "uid": "5ec7a270-3825-4b46-9619-0faa3a84d540"
+        },
+        "spec": {
+          "replicas": 0,
+          "selector": {
+            "matchLabels": {
+              "app": "checkout-api",
+              "pod-template-hash": "6d6ff44b5b"
+            }
+          },
+          "template": {
+            "metadata": {
+              "annotations": {
+                "ai-sre-commander/rollback-time": "2026-09-27T13:04:47.866Z",
+                "ai-sre-commander/target-revision": "25",
+                "ai-sre-commander/template-hash": "64e06b1b00073ffc68ce68eeb2ae3104193a5b3e0db0c1957e54519151706f36",
+                "prometheus.io/path": "/metrics",
+                "prometheus.io/port": "80",
+                "prometheus.io/scrape": "true"
+              },
+              "labels": {
+                "app": "checkout-api",
+                "pod-template-hash": "6d6ff44b5b",
+                "version": "v1.0.0"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "command": [
+                    "node",
+                    "/app/server.js"
+                  ],
+                  "env": [
+                    {
+                      "name": "PORT",
+                      "value": "80"
+                    },
+                    {
+                      "name": "APP_VERSION",
+                      "value": "v1.1.0-buggy"
+                    },
+                    {
+                      "name": "CHAOS_MODE",
+                      "value": "error_spike"
+                    }
+                  ],
+                  "image": "node:22-alpine",
+                  "imagePullPolicy": "IfNotPresent",
+                  "livenessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 5,
+                    "periodSeconds": 10,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "name": "checkout-api",
+                  "ports": [
+                    {
+                      "containerPort": 80,
+                      "name": "http",
+                      "protocol": "TCP"
+                    }
+                  ],
+                  "readinessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 3,
+                    "periodSeconds": 5,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "resources": {
+                    "limits": {
+                      "cpu": "200m",
+                      "memory": "512Mi"
+                    },
+                    "requests": {
+                      "cpu": "50m",
+                      "memory": "64Mi"
+                    }
+                  },
+                  "terminationMessagePath": "/dev/termination-log",
+                  "terminationMessagePolicy": "File",
+                  "volumeMounts": [
+                    {
+                      "mountPath": "/app",
+                      "name": "app-code"
+                    }
+                  ]
+                }
+              ],
+              "dnsPolicy": "ClusterFirst",
+              "restartPolicy": "Always",
+              "schedulerName": "default-scheduler",
+              "securityContext": {},
+              "terminationGracePeriodSeconds": 30,
+              "volumes": [
+                {
+                  "configMap": {
+                    "defaultMode": 420,
+                    "name": "checkout-api-code"
+                  },
+                  "name": "app-code"
+                }
+              ]
+            }
+          }
+        },
+        "status": {
+          "observedGeneration": 4,
+          "replicas": 0,
+          "terminatingReplicas": 0
+        }
+      },
+      {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "metadata": {
+          "annotations": {
+            "deployment.kubernetes.io/desired-replicas": "2",
+            "deployment.kubernetes.io/max-replicas": "3",
+            "deployment.kubernetes.io/revision": "34",
+            "kubernetes.io/change-cause": "Rollback to revision 32 (template hash: 345115c23ffc) via AI SRE Commander"
+          },
+          "creationTimestamp": "2026-09-27T18:03:42Z",
+          "generation": 4,
+          "labels": {
+            "app": "checkout-api",
+            "pod-template-hash": "6fc59c89d",
+            "version": "v1.0.0"
+          },
+          "name": "checkout-api-6fc59c89d",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "Deployment",
+              "name": "checkout-api",
+              "uid": "5e030b7e-a143-4939-9df4-bedd83102f3b"
+            }
+          ],
+          "resourceVersion": "100960",
+          "uid": "d500be05-27fe-48c4-87e0-748d60b83b30"
+        },
+        "spec": {
+          "replicas": 0,
+          "selector": {
+            "matchLabels": {
+              "app": "checkout-api",
+              "pod-template-hash": "6fc59c89d"
+            }
+          },
+          "template": {
+            "metadata": {
+              "annotations": {
+                "ai-sre-commander/rollback-time": "2026-09-27T18:03:41.557Z",
+                "ai-sre-commander/target-revision": "32",
+                "ai-sre-commander/template-hash": "345115c23ffcd6bc69045fb7dbc6bbbb0ee752e5fb9c3f1839b1d671013e132b",
+                "prometheus.io/path": "/metrics",
+                "prometheus.io/port": "80",
+                "prometheus.io/scrape": "true"
+              },
+              "labels": {
+                "app": "checkout-api",
+                "pod-template-hash": "6fc59c89d",
+                "version": "v1.0.0"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "command": [
+                    "node",
+                    "/app/server.js"
+                  ],
+                  "env": [
+                    {
+                      "name": "PORT",
+                      "value": "80"
+                    },
+                    {
+                      "name": "APP_VERSION",
+                      "value": "v1.0.0"
+                    },
+                    {
+                      "name": "CHAOS_MODE",
+                      "value": "none"
+                    }
+                  ],
+                  "image": "node:22-alpine",
+                  "imagePullPolicy": "IfNotPresent",
+                  "livenessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 5,
+                    "periodSeconds": 10,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "name": "checkout-api",
+                  "ports": [
+                    {
+                      "containerPort": 80,
+                      "name": "http",
+                      "protocol": "TCP"
+                    }
+                  ],
+                  "readinessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 3,
+                    "periodSeconds": 5,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "resources": {
+                    "limits": {
+                      "cpu": "200m",
+                      "memory": "512Mi"
+                    },
+                    "requests": {
+                      "cpu": "50m",
+                      "memory": "64Mi"
+                    }
+                  },
+                  "terminationMessagePath": "/dev/termination-log",
+                  "terminationMessagePolicy": "File",
+                  "volumeMounts": [
+                    {
+                      "mountPath": "/app",
+                      "name": "app-code"
+                    }
+                  ]
+                }
+              ],
+              "dnsPolicy": "ClusterFirst",
+              "restartPolicy": "Always",
+              "schedulerName": "default-scheduler",
+              "securityContext": {},
+              "terminationGracePeriodSeconds": 30,
+              "volumes": [
+                {
+                  "configMap": {
+                    "defaultMode": 420,
+                    "name": "checkout-api-code"
+                  },
+                  "name": "app-code"
+                }
+              ]
+            }
+          }
+        },
+        "status": {
+          "observedGeneration": 4,
+          "replicas": 0,
+          "terminatingReplicas": 0
+        }
+      },
+      {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "metadata": {
+          "annotations": {
+            "deployment.kubernetes.io/desired-replicas": "2",
+            "deployment.kubernetes.io/max-replicas": "3",
+            "deployment.kubernetes.io/revision": "26",
+            "kubernetes.io/change-cause": "Rollback to revision 24 (template hash: 7ce496ef974c) via AI SRE Commander"
+          },
+          "creationTimestamp": "2026-09-27T13:02:55Z",
+          "generation": 4,
+          "labels": {
+            "app": "checkout-api",
+            "pod-template-hash": "7495cfbfc8",
+            "version": "v1.0.0"
+          },
+          "name": "checkout-api-7495cfbfc8",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "Deployment",
+              "name": "checkout-api",
+              "uid": "5e030b7e-a143-4939-9df4-bedd83102f3b"
+            }
+          ],
+          "resourceVersion": "25340",
+          "uid": "3f49a53b-a773-4850-bf2a-8d670211fa9b"
+        },
+        "spec": {
+          "replicas": 0,
+          "selector": {
+            "matchLabels": {
+              "app": "checkout-api",
+              "pod-template-hash": "7495cfbfc8"
+            }
+          },
+          "template": {
+            "metadata": {
+              "annotations": {
+                "ai-sre-commander/rollback-time": "2026-09-27T13:02:55.100Z",
+                "ai-sre-commander/target-revision": "24",
+                "ai-sre-commander/template-hash": "7ce496ef974cf0981f19cdd6a8328c9a48b6bf972817473f7b6601d96f0a106a",
+                "prometheus.io/port": "8080",
+                "prometheus.io/scrape": "true"
+              },
+              "labels": {
+                "app": "checkout-api",
+                "pod-template-hash": "7495cfbfc8",
+                "version": "v1.0.0"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "image": "nginx:1.27-alpine",
+                  "imagePullPolicy": "IfNotPresent",
+                  "livenessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 5,
+                    "periodSeconds": 10,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "name": "checkout-api",
+                  "ports": [
+                    {
+                      "containerPort": 80,
+                      "name": "http",
+                      "protocol": "TCP"
+                    }
+                  ],
+                  "readinessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 3,
+                    "periodSeconds": 5,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "resources": {
+                    "limits": {
+                      "cpu": "200m",
+                      "memory": "512Mi"
+                    },
+                    "requests": {
+                      "cpu": "50m",
+                      "memory": "64Mi"
+                    }
+                  },
+                  "terminationMessagePath": "/dev/termination-log",
+                  "terminationMessagePolicy": "File"
+                }
+              ],
+              "dnsPolicy": "ClusterFirst",
+              "restartPolicy": "Always",
+              "schedulerName": "default-scheduler",
+              "securityContext": {},
+              "terminationGracePeriodSeconds": 30
+            }
+          }
+        },
+        "status": {
+          "observedGeneration": 4,
+          "replicas": 0,
+          "terminatingReplicas": 0
+        }
+      },
+      {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "metadata": {
+          "annotations": {
+            "deployment.kubernetes.io/desired-replicas": "2",
+            "deployment.kubernetes.io/max-replicas": "3",
+            "deployment.kubernetes.io/revision": "33",
+            "kubernetes.io/change-cause": "Rollback to revision 31 (template hash: 04d76a1bd062) via AI SRE Commander"
+          },
+          "creationTimestamp": "2026-09-27T18:01:44Z",
+          "generation": 4,
+          "labels": {
+            "app": "checkout-api",
+            "pod-template-hash": "9647b79fd",
+            "version": "v1.0.0"
+          },
+          "name": "checkout-api-9647b79fd",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "Deployment",
+              "name": "checkout-api",
+              "uid": "5e030b7e-a143-4939-9df4-bedd83102f3b"
+            }
+          ],
+          "resourceVersion": "100363",
+          "uid": "257d2cba-03b0-432a-a18c-81447c793174"
+        },
+        "spec": {
+          "replicas": 0,
+          "selector": {
+            "matchLabels": {
+              "app": "checkout-api",
+              "pod-template-hash": "9647b79fd"
+            }
+          },
+          "template": {
+            "metadata": {
+              "annotations": {
+                "ai-sre-commander/rollback-time": "2026-09-27T18:01:43.791Z",
+                "ai-sre-commander/target-revision": "31",
+                "ai-sre-commander/template-hash": "04d76a1bd062b19d8bd7ebbb09dbf0daf0a7059defc78033fe644ef72538001c",
+                "prometheus.io/path": "/metrics",
+                "prometheus.io/port": "80",
+                "prometheus.io/scrape": "true"
+              },
+              "labels": {
+                "app": "checkout-api",
+                "pod-template-hash": "9647b79fd",
+                "version": "v1.0.0"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "command": [
+                    "node",
+                    "/app/server.js"
+                  ],
+                  "env": [
+                    {
+                      "name": "PORT",
+                      "value": "80"
+                    },
+                    {
+                      "name": "APP_VERSION",
+                      "value": "v1.1.0-buggy"
+                    },
+                    {
+                      "name": "CHAOS_MODE",
+                      "value": "error_spike"
+                    }
+                  ],
+                  "image": "node:22-alpine",
+                  "imagePullPolicy": "IfNotPresent",
+                  "livenessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 5,
+                    "periodSeconds": 10,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "name": "checkout-api",
+                  "ports": [
+                    {
+                      "containerPort": 80,
+                      "name": "http",
+                      "protocol": "TCP"
+                    }
+                  ],
+                  "readinessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/health",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 3,
+                    "periodSeconds": 5,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "resources": {
+                    "limits": {
+                      "cpu": "200m",
+                      "memory": "512Mi"
+                    },
+                    "requests": {
+                      "cpu": "50m",
+                      "memory": "64Mi"
+                    }
+                  },
+                  "terminationMessagePath": "/dev/termination-log",
+                  "terminationMessagePolicy": "File",
+                  "volumeMounts": [
+                    {
+                      "mountPath": "/app",
+                      "name": "app-code"
+                    }
+                  ]
+                }
+              ],
+              "dnsPolicy": "ClusterFirst",
+              "restartPolicy": "Always",
+              "schedulerName": "default-scheduler",
+              "securityContext": {},
+              "terminationGracePeriodSeconds": 30,
+              "volumes": [
+                {
+                  "configMap": {
+                    "defaultMode": 420,
+                    "name": "checkout-api-code"
+                  },
+                  "name": "app-code"
+                }
+              ]
+            }
+          }
+        },
+        "status": {
+          "observedGeneration": 4,
+          "replicas": 0,
+          "terminatingReplicas": 0
+        }
+      },
+      {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "metadata": {
+          "annotations": {
+            "deployment.kubernetes.io/desired-replicas": "2",
+            "deployment.kubernetes.io/max-replicas": "3",
+            "deployment.kubernetes.io/revision": "27",
+            "kubernetes.io/change-cause": "Rollback to revision 25 (template hash: 64e06b1b0007) via AI SRE Commander"
+          },
+          "creationTimestamp": "2026-09-27T13:04:48Z",
+          "generation": 4,
+          "labels": {
+            "app": "checkout-api",
+            "pod-template-hash": "c6fb5fcbb",
+            "version": "v1.0.0"
+          },
+          "name": "checkout-api-c6fb5fcbb",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "Deployment",
+              "name": "checkout-api",
+              "uid": "5e030b7e-a143-4939-9df4-bedd83102f3b"
+            }
+          ],
+          "resourceVersion": "72959",
+          "uid": "7f7c5d51-ec5a-441b-8eb3-483cdb99d985"
+        },
+        "spec": {
+          "replicas": 0,
+          "selector": {
+            "matchLabels": {
+              "app": "checkout-api",
+              "pod-template-hash": "c6fb5fcbb"
+            }
+          },
+          "template": {
+            "metadata": {
+              "annotations": {
+                "ai-sre-commander/rollback-time": "2026-09-27T13:04:47.866Z",
+                "ai-sre-commander/target-revision": "25",
+                "ai-sre-commander/template-hash": "64e06b1b00073ffc68ce68eeb2ae3104193a5b3e0db0c1957e54519151706f36",
+                "prometheus.io/port": "8080",
+                "prometheus.io/scrape": "true"
+              },
+              "labels": {
+                "app": "checkout-api",
+                "pod-template-hash": "c6fb5fcbb",
+                "version": "v1.0.0"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "image": "nginx:1.27-alpine",
+                  "imagePullPolicy": "IfNotPresent",
+                  "livenessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 5,
+                    "periodSeconds": 10,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "name": "checkout-api",
+                  "ports": [
+                    {
+                      "containerPort": 80,
+                      "name": "http",
+                      "protocol": "TCP"
+                    }
+                  ],
+                  "readinessProbe": {
+                    "failureThreshold": 3,
+                    "httpGet": {
+                      "path": "/",
+                      "port": 80,
+                      "scheme": "HTTP"
+                    },
+                    "initialDelaySeconds": 3,
+                    "periodSeconds": 5,
+                    "successThreshold": 1,
+                    "timeoutSeconds": 1
+                  },
+                  "resources": {
+                    "limits": {
+                      "cpu": "200m",
+                      "memory": "512Mi"
+                    },
+                    "requests": {
+                      "cpu": "50m",
+                      "memory": "64Mi"
+                    }
+                  },
+                  "terminationMessagePath": "/dev/termination-log",
+                  "terminationMessagePolicy": "File"
+                }
+              ],
+              "dnsPolicy": "ClusterFirst",
+              "restartPolicy": "Always",
+              "schedulerName": "default-scheduler",
+              "securityContext": {},
+              "terminationGracePeriodSeconds": 30
+            }
+          }
+        },
+        "status": {
+          "observedGeneration": 4,
+          "replicas": 0,
+          "terminatingReplicas": 0
+        }
+      },
+      {
+        "apiVersion": "apps/v1",
+        "kind": "ReplicaSet",
+        "metadata": {
+          "annotations": {
+            "deployment.kubernetes.io/desired-replicas": "1",
+            "deployment.kubernetes.io/max-replicas": "2",
+            "deployment.kubernetes.io/revision": "1"
+          },
+          "creationTimestamp": "2026-09-27T16:15:50Z",
+          "generation": 1,
+          "labels": {
+            "app": "traffic-generator",
+            "pod-template-hash": "6d6d5b887"
+          },
+          "name": "traffic-generator-6d6d5b887",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "Deployment",
+              "name": "traffic-generator",
+              "uid": "d35e4ca8-4f52-4a41-98d6-c63fa746d974"
+            }
+          ],
+          "resourceVersion": "72856",
+          "uid": "65296019-918e-493d-9ef5-892fc7ad3e1d"
+        },
+        "spec": {
+          "replicas": 1,
+          "selector": {
+            "matchLabels": {
+              "app": "traffic-generator",
+              "pod-template-hash": "6d6d5b887"
+            }
+          },
+          "template": {
+            "metadata": {
+              "labels": {
+                "app": "traffic-generator",
+                "pod-template-hash": "6d6d5b887"
+              }
+            },
+            "spec": {
+              "containers": [
+                {
+                  "command": [
+                    "node",
+                    "/app/traffic-gen.js"
+                  ],
+                  "env": [
+                    {
+                      "name": "TARGET_URL",
+                      "value": "http://checkout-api.sre-demo.svc.cluster.local/api/checkout"
+                    },
+                    {
+                      "name": "RPS",
+                      "value": "10"
+                    }
+                  ],
+                  "image": "node:22-alpine",
+                  "imagePullPolicy": "IfNotPresent",
+                  "name": "traffic-gen",
+                  "resources": {
+                    "limits": {
+                      "cpu": "50m",
+                      "memory": "64Mi"
+                    },
+                    "requests": {
+                      "cpu": "20m",
+                      "memory": "32Mi"
+                    }
+                  },
+                  "terminationMessagePath": "/dev/termination-log",
+                  "terminationMessagePolicy": "File",
+                  "volumeMounts": [
+                    {
+                      "mountPath": "/app",
+                      "name": "gen-code"
+                    }
+                  ]
+                }
+              ],
+              "dnsPolicy": "ClusterFirst",
+              "restartPolicy": "Always",
+              "schedulerName": "default-scheduler",
+              "securityContext": {},
+              "terminationGracePeriodSeconds": 30,
+              "volumes": [
+                {
+                  "configMap": {
+                    "defaultMode": 420,
+                    "name": "traffic-generator-code"
+                  },
+                  "name": "gen-code"
+                }
+              ]
+            }
+          }
+        },
+        "status": {
+          "availableReplicas": 1,
+          "fullyLabeledReplicas": 1,
+          "observedGeneration": 1,
+          "readyReplicas": 1,
+          "replicas": 1,
+          "terminatingReplicas": 0
+        }
+      }
+    ],
+    "kind": "List",
+    "metadata": {
+      "resourceVersion": ""
+    }
+  },
+  "pods": {
+    "apiVersion": "v1",
+    "items": [
+      {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": {
+          "annotations": {
+            "ai-sre-commander/rollback-time": "2026-09-28T00:19:20.001Z",
+            "ai-sre-commander/target-revision": "34",
+            "ai-sre-commander/template-hash": "ba563015b4e9d98ce56b74f07f077f5c6a1e3bc7ef41cf2ea53fd80eb83f9b07",
+            "prometheus.io/path": "/metrics",
+            "prometheus.io/port": "80",
+            "prometheus.io/scrape": "true"
+          },
+          "creationTimestamp": "2026-09-28T00:19:20Z",
+          "generateName": "checkout-api-6466cfbc67-",
+          "generation": 1,
+          "labels": {
+            "app": "checkout-api",
+            "pod-template-hash": "6466cfbc67",
+            "topology.kubernetes.io/region": "centralindia",
+            "topology.kubernetes.io/zone": "0",
+            "version": "v1.0.0"
+          },
+          "name": "checkout-api-6466cfbc67-4nqmc",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "ReplicaSet",
+              "name": "checkout-api-6466cfbc67",
+              "uid": "460a43cc-f15a-4529-8859-a35081bc7489"
+            }
+          ],
+          "resourceVersion": "193671",
+          "uid": "77893d39-c69c-4e79-aaa1-bdc8e005d918"
+        },
+        "spec": {
+          "containers": [
+            {
+              "command": [
+                "node",
+                "/app/server.js"
+              ],
+              "env": [
+                {
+                  "name": "PORT",
+                  "value": "80"
+                },
+                {
+                  "name": "APP_VERSION",
+                  "value": "v1.0.0"
+                },
+                {
+                  "name": "CHAOS_MODE",
+                  "value": "none"
+                }
+              ],
+              "image": "node:22-alpine",
+              "imagePullPolicy": "IfNotPresent",
+              "livenessProbe": {
+                "failureThreshold": 3,
+                "httpGet": {
+                  "path": "/health",
+                  "port": 80,
+                  "scheme": "HTTP"
+                },
+                "initialDelaySeconds": 5,
+                "periodSeconds": 10,
+                "successThreshold": 1,
+                "timeoutSeconds": 1
+              },
+              "name": "checkout-api",
+              "ports": [
+                {
+                  "containerPort": 80,
+                  "name": "http",
+                  "protocol": "TCP"
+                }
+              ],
+              "readinessProbe": {
+                "failureThreshold": 3,
+                "httpGet": {
+                  "path": "/health",
+                  "port": 80,
+                  "scheme": "HTTP"
+                },
+                "initialDelaySeconds": 3,
+                "periodSeconds": 5,
+                "successThreshold": 1,
+                "timeoutSeconds": 1
+              },
+              "resources": {
+                "limits": {
+                  "cpu": "200m",
+                  "memory": "512Mi"
+                },
+                "requests": {
+                  "cpu": "50m",
+                  "memory": "64Mi"
+                }
+              },
+              "terminationMessagePath": "/dev/termination-log",
+              "terminationMessagePolicy": "File",
+              "volumeMounts": [
+                {
+                  "mountPath": "/app",
+                  "name": "app-code"
+                },
+                {
+                  "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                  "name": "kube-api-access-2rzth",
+                  "readOnly": true
+                }
+              ]
+            }
+          ],
+          "dnsPolicy": "ClusterFirst",
+          "enableServiceLinks": true,
+          "nodeName": "aks-systempool-26074755-vmss000000",
+          "preemptionPolicy": "PreemptLowerPriority",
+          "priority": 0,
+          "restartPolicy": "Always",
+          "schedulerName": "default-scheduler",
+          "securityContext": {},
+          "serviceAccount": "default",
+          "serviceAccountName": "default",
+          "terminationGracePeriodSeconds": 30,
+          "tolerations": [
+            {
+              "effect": "NoExecute",
+              "key": "node.kubernetes.io/not-ready",
+              "operator": "Exists",
+              "tolerationSeconds": 300
+            },
+            {
+              "effect": "NoExecute",
+              "key": "node.kubernetes.io/unreachable",
+              "operator": "Exists",
+              "tolerationSeconds": 300
+            },
+            {
+              "effect": "NoSchedule",
+              "key": "node.kubernetes.io/memory-pressure",
+              "operator": "Exists"
+            }
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "defaultMode": 420,
+                "name": "checkout-api-code"
+              },
+              "name": "app-code"
+            },
+            {
+              "name": "kube-api-access-2rzth",
+              "projected": {
+                "defaultMode": 420,
+                "sources": [
+                  {
+                    "serviceAccountToken": {
+                      "expirationSeconds": 3607,
+                      "path": "token"
+                    }
+                  },
+                  {
+                    "configMap": {
+                      "items": [
+                        {
+                          "key": "ca.crt",
+                          "path": "ca.crt"
+                        }
+                      ],
+                      "name": "kube-root-ca.crt"
+                    }
+                  },
+                  {
+                    "downwardAPI": {
+                      "items": [
+                        {
+                          "fieldRef": {
+                            "apiVersion": "v1",
+                            "fieldPath": "metadata.namespace"
+                          },
+                          "path": "namespace"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "status": {
+          "conditions": [
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-28T00:19:21Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "PodReadyToStartContainers"
+            },
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-28T00:19:20Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "Initialized"
+            },
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-28T00:19:27Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "Ready"
+            },
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-28T00:19:27Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "ContainersReady"
+            },
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-28T00:19:20Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "PodScheduled"
+            }
+          ],
+          "containerStatuses": [
+            {
+              "allocatedResources": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "containerID": "containerd://f0c77f3904445e2fe054eefcfb7013dbb8aa94260a9a587bdb325d1e6819a76b",
+              "image": "docker.io/library/node:22-alpine",
+              "imageID": "docker.io/library/node@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402",
+              "lastState": {},
+              "name": "checkout-api",
+              "ready": true,
+              "resources": {
+                "limits": {
+                  "cpu": "200m",
+                  "memory": "512Mi"
+                },
+                "requests": {
+                  "cpu": "50m",
+                  "memory": "64Mi"
+                }
+              },
+              "restartCount": 0,
+              "started": true,
+              "state": {
+                "running": {
+                  "startedAt": "2026-09-28T00:19:21Z"
+                }
+              },
+              "user": {
+                "linux": {
+                  "gid": 0,
+                  "supplementalGroups": [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    6,
+                    10,
+                    11,
+                    20,
+                    26,
+                    27
+                  ],
+                  "uid": 0
+                }
+              },
+              "volumeMounts": [
+                {
+                  "mountPath": "/app",
+                  "name": "app-code"
+                },
+                {
+                  "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                  "name": "kube-api-access-2rzth",
+                  "readOnly": true,
+                  "recursiveReadOnly": "Disabled"
+                }
+              ]
+            }
+          ],
+          "hostIP": "10.100.1.4",
+          "hostIPs": [
+            {
+              "ip": "10.100.1.4"
+            }
+          ],
+          "observedGeneration": 1,
+          "phase": "Running",
+          "podIP": "10.100.1.24",
+          "podIPs": [
+            {
+              "ip": "10.100.1.24"
+            }
+          ],
+          "qosClass": "Burstable",
+          "startTime": "2026-09-28T00:19:20Z"
+        }
+      },
+      {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": {
+          "annotations": {
+            "ai-sre-commander/rollback-time": "2026-09-28T00:19:20.001Z",
+            "ai-sre-commander/target-revision": "34",
+            "ai-sre-commander/template-hash": "ba563015b4e9d98ce56b74f07f077f5c6a1e3bc7ef41cf2ea53fd80eb83f9b07",
+            "prometheus.io/path": "/metrics",
+            "prometheus.io/port": "80",
+            "prometheus.io/scrape": "true"
+          },
+          "creationTimestamp": "2026-09-28T00:19:28Z",
+          "generateName": "checkout-api-6466cfbc67-",
+          "generation": 1,
+          "labels": {
+            "app": "checkout-api",
+            "pod-template-hash": "6466cfbc67",
+            "topology.kubernetes.io/region": "centralindia",
+            "topology.kubernetes.io/zone": "0",
+            "version": "v1.0.0"
+          },
+          "name": "checkout-api-6466cfbc67-6rppr",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "ReplicaSet",
+              "name": "checkout-api-6466cfbc67",
+              "uid": "460a43cc-f15a-4529-8859-a35081bc7489"
+            }
+          ],
+          "resourceVersion": "193730",
+          "uid": "1ba9c239-773f-444e-bf3b-7c0d4fbf50af"
+        },
+        "spec": {
+          "containers": [
+            {
+              "command": [
+                "node",
+                "/app/server.js"
+              ],
+              "env": [
+                {
+                  "name": "PORT",
+                  "value": "80"
+                },
+                {
+                  "name": "APP_VERSION",
+                  "value": "v1.0.0"
+                },
+                {
+                  "name": "CHAOS_MODE",
+                  "value": "none"
+                }
+              ],
+              "image": "node:22-alpine",
+              "imagePullPolicy": "IfNotPresent",
+              "livenessProbe": {
+                "failureThreshold": 3,
+                "httpGet": {
+                  "path": "/health",
+                  "port": 80,
+                  "scheme": "HTTP"
+                },
+                "initialDelaySeconds": 5,
+                "periodSeconds": 10,
+                "successThreshold": 1,
+                "timeoutSeconds": 1
+              },
+              "name": "checkout-api",
+              "ports": [
+                {
+                  "containerPort": 80,
+                  "name": "http",
+                  "protocol": "TCP"
+                }
+              ],
+              "readinessProbe": {
+                "failureThreshold": 3,
+                "httpGet": {
+                  "path": "/health",
+                  "port": 80,
+                  "scheme": "HTTP"
+                },
+                "initialDelaySeconds": 3,
+                "periodSeconds": 5,
+                "successThreshold": 1,
+                "timeoutSeconds": 1
+              },
+              "resources": {
+                "limits": {
+                  "cpu": "200m",
+                  "memory": "512Mi"
+                },
+                "requests": {
+                  "cpu": "50m",
+                  "memory": "64Mi"
+                }
+              },
+              "terminationMessagePath": "/dev/termination-log",
+              "terminationMessagePolicy": "File",
+              "volumeMounts": [
+                {
+                  "mountPath": "/app",
+                  "name": "app-code"
+                },
+                {
+                  "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                  "name": "kube-api-access-6rh2n",
+                  "readOnly": true
+                }
+              ]
+            }
+          ],
+          "dnsPolicy": "ClusterFirst",
+          "enableServiceLinks": true,
+          "nodeName": "aks-systempool-26074755-vmss000000",
+          "preemptionPolicy": "PreemptLowerPriority",
+          "priority": 0,
+          "restartPolicy": "Always",
+          "schedulerName": "default-scheduler",
+          "securityContext": {},
+          "serviceAccount": "default",
+          "serviceAccountName": "default",
+          "terminationGracePeriodSeconds": 30,
+          "tolerations": [
+            {
+              "effect": "NoExecute",
+              "key": "node.kubernetes.io/not-ready",
+              "operator": "Exists",
+              "tolerationSeconds": 300
+            },
+            {
+              "effect": "NoExecute",
+              "key": "node.kubernetes.io/unreachable",
+              "operator": "Exists",
+              "tolerationSeconds": 300
+            },
+            {
+              "effect": "NoSchedule",
+              "key": "node.kubernetes.io/memory-pressure",
+              "operator": "Exists"
+            }
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "defaultMode": 420,
+                "name": "checkout-api-code"
+              },
+              "name": "app-code"
+            },
+            {
+              "name": "kube-api-access-6rh2n",
+              "projected": {
+                "defaultMode": 420,
+                "sources": [
+                  {
+                    "serviceAccountToken": {
+                      "expirationSeconds": 3607,
+                      "path": "token"
+                    }
+                  },
+                  {
+                    "configMap": {
+                      "items": [
+                        {
+                          "key": "ca.crt",
+                          "path": "ca.crt"
+                        }
+                      ],
+                      "name": "kube-root-ca.crt"
+                    }
+                  },
+                  {
+                    "downwardAPI": {
+                      "items": [
+                        {
+                          "fieldRef": {
+                            "apiVersion": "v1",
+                            "fieldPath": "metadata.namespace"
+                          },
+                          "path": "namespace"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "status": {
+          "conditions": [
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-28T00:19:28Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "PodReadyToStartContainers"
+            },
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-28T00:19:28Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "Initialized"
+            },
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-28T00:19:34Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "Ready"
+            },
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-28T00:19:34Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "ContainersReady"
+            },
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-28T00:19:28Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "PodScheduled"
+            }
+          ],
+          "containerStatuses": [
+            {
+              "allocatedResources": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "containerID": "containerd://f7bbeff21104de9676f8d6c5d8de541734fa446c0e0438fbaa856bc85618d0e0",
+              "image": "docker.io/library/node:22-alpine",
+              "imageID": "docker.io/library/node@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402",
+              "lastState": {},
+              "name": "checkout-api",
+              "ready": true,
+              "resources": {
+                "limits": {
+                  "cpu": "200m",
+                  "memory": "512Mi"
+                },
+                "requests": {
+                  "cpu": "50m",
+                  "memory": "64Mi"
+                }
+              },
+              "restartCount": 0,
+              "started": true,
+              "state": {
+                "running": {
+                  "startedAt": "2026-09-28T00:19:28Z"
+                }
+              },
+              "user": {
+                "linux": {
+                  "gid": 0,
+                  "supplementalGroups": [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    6,
+                    10,
+                    11,
+                    20,
+                    26,
+                    27
+                  ],
+                  "uid": 0
+                }
+              },
+              "volumeMounts": [
+                {
+                  "mountPath": "/app",
+                  "name": "app-code"
+                },
+                {
+                  "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                  "name": "kube-api-access-6rh2n",
+                  "readOnly": true,
+                  "recursiveReadOnly": "Disabled"
+                }
+              ]
+            }
+          ],
+          "hostIP": "10.100.1.4",
+          "hostIPs": [
+            {
+              "ip": "10.100.1.4"
+            }
+          ],
+          "observedGeneration": 1,
+          "phase": "Running",
+          "podIP": "10.100.1.8",
+          "podIPs": [
+            {
+              "ip": "10.100.1.8"
+            }
+          ],
+          "qosClass": "Burstable",
+          "startTime": "2026-09-28T00:19:28Z"
+        }
+      },
+      {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": {
+          "creationTimestamp": "2026-09-27T16:15:50Z",
+          "generateName": "traffic-generator-6d6d5b887-",
+          "generation": 1,
+          "labels": {
+            "app": "traffic-generator",
+            "pod-template-hash": "6d6d5b887",
+            "topology.kubernetes.io/region": "centralindia",
+            "topology.kubernetes.io/zone": "0"
+          },
+          "name": "traffic-generator-6d6d5b887-lft9c",
+          "namespace": "sre-demo",
+          "ownerReferences": [
+            {
+              "apiVersion": "apps/v1",
+              "blockOwnerDeletion": true,
+              "controller": true,
+              "kind": "ReplicaSet",
+              "name": "traffic-generator-6d6d5b887",
+              "uid": "65296019-918e-493d-9ef5-892fc7ad3e1d"
+            }
+          ],
+          "resourceVersion": "72854",
+          "uid": "3eeb9b79-1ed1-48d5-90c5-0c2e8f00d443"
+        },
+        "spec": {
+          "containers": [
+            {
+              "command": [
+                "node",
+                "/app/traffic-gen.js"
+              ],
+              "env": [
+                {
+                  "name": "TARGET_URL",
+                  "value": "http://checkout-api.sre-demo.svc.cluster.local/api/checkout"
+                },
+                {
+                  "name": "RPS",
+                  "value": "10"
+                }
+              ],
+              "image": "node:22-alpine",
+              "imagePullPolicy": "IfNotPresent",
+              "name": "traffic-gen",
+              "resources": {
+                "limits": {
+                  "cpu": "50m",
+                  "memory": "64Mi"
+                },
+                "requests": {
+                  "cpu": "20m",
+                  "memory": "32Mi"
+                }
+              },
+              "terminationMessagePath": "/dev/termination-log",
+              "terminationMessagePolicy": "File",
+              "volumeMounts": [
+                {
+                  "mountPath": "/app",
+                  "name": "gen-code"
+                },
+                {
+                  "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                  "name": "kube-api-access-lwxwq",
+                  "readOnly": true
+                }
+              ]
+            }
+          ],
+          "dnsPolicy": "ClusterFirst",
+          "enableServiceLinks": true,
+          "nodeName": "aks-systempool-26074755-vmss000000",
+          "preemptionPolicy": "PreemptLowerPriority",
+          "priority": 0,
+          "restartPolicy": "Always",
+          "schedulerName": "default-scheduler",
+          "securityContext": {},
+          "serviceAccount": "default",
+          "serviceAccountName": "default",
+          "terminationGracePeriodSeconds": 30,
+          "tolerations": [
+            {
+              "effect": "NoExecute",
+              "key": "node.kubernetes.io/not-ready",
+              "operator": "Exists",
+              "tolerationSeconds": 300
+            },
+            {
+              "effect": "NoExecute",
+              "key": "node.kubernetes.io/unreachable",
+              "operator": "Exists",
+              "tolerationSeconds": 300
+            },
+            {
+              "effect": "NoSchedule",
+              "key": "node.kubernetes.io/memory-pressure",
+              "operator": "Exists"
+            }
+          ],
+          "volumes": [
+            {
+              "configMap": {
+                "defaultMode": 420,
+                "name": "traffic-generator-code"
+              },
+              "name": "gen-code"
+            },
+            {
+              "name": "kube-api-access-lwxwq",
+              "projected": {
+                "defaultMode": 420,
+                "sources": [
+                  {
+                    "serviceAccountToken": {
+                      "expirationSeconds": 3607,
+                      "path": "token"
+                    }
+                  },
+                  {
+                    "configMap": {
+                      "items": [
+                        {
+                          "key": "ca.crt",
+                          "path": "ca.crt"
+                        }
+                      ],
+                      "name": "kube-root-ca.crt"
+                    }
+                  },
+                  {
+                    "downwardAPI": {
+                      "items": [
+                        {
+                          "fieldRef": {
+                            "apiVersion": "v1",
+                            "fieldPath": "metadata.namespace"
+                          },
+                          "path": "namespace"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "status": {
+          "conditions": [
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-27T16:15:58Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "PodReadyToStartContainers"
+            },
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-27T16:15:50Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "Initialized"
+            },
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-27T16:15:58Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "Ready"
+            },
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-27T16:15:58Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "ContainersReady"
+            },
+            {
+              "lastProbeTime": null,
+              "lastTransitionTime": "2026-09-27T16:15:50Z",
+              "observedGeneration": 1,
+              "status": "True",
+              "type": "PodScheduled"
+            }
+          ],
+          "containerStatuses": [
+            {
+              "allocatedResources": {
+                "cpu": "20m",
+                "memory": "32Mi"
+              },
+              "containerID": "containerd://5074291112c33e9a1facb53f1c0f86eee38dc55723083418b35dff68b4b1202f",
+              "image": "docker.io/library/node:22-alpine",
+              "imageID": "docker.io/library/node@sha256:0a7108bf6c7bf5de370ffb1a3ed6be93d405b43ff159f681a8d18c0e2bc2e402",
+              "lastState": {},
+              "name": "traffic-gen",
+              "ready": true,
+              "resources": {
+                "limits": {
+                  "cpu": "50m",
+                  "memory": "64Mi"
+                },
+                "requests": {
+                  "cpu": "20m",
+                  "memory": "32Mi"
+                }
+              },
+              "restartCount": 0,
+              "started": true,
+              "state": {
+                "running": {
+                  "startedAt": "2026-09-27T16:15:57Z"
+                }
+              },
+              "user": {
+                "linux": {
+                  "gid": 0,
+                  "supplementalGroups": [
+                    0,
+                    1,
+                    2,
+                    3,
+                    4,
+                    6,
+                    10,
+                    11,
+                    20,
+                    26,
+                    27
+                  ],
+                  "uid": 0
+                }
+              },
+              "volumeMounts": [
+                {
+                  "mountPath": "/app",
+                  "name": "gen-code"
+                },
+                {
+                  "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                  "name": "kube-api-access-lwxwq",
+                  "readOnly": true,
+                  "recursiveReadOnly": "Disabled"
+                }
+              ]
+            }
+          ],
+          "hostIP": "10.100.1.4",
+          "hostIPs": [
+            {
+              "ip": "10.100.1.4"
+            }
+          ],
+          "observedGeneration": 1,
+          "phase": "Running",
+          "podIP": "10.100.1.27",
+          "podIPs": [
+            {
+              "ip": "10.100.1.27"
+            }
+          ],
+          "qosClass": "Burstable",
+          "startTime": "2026-09-27T16:15:50Z"
+        }
+      }
+    ],
+    "kind": "List",
+    "metadata": {
+      "resourceVersion": ""
+    }
+  }
+}

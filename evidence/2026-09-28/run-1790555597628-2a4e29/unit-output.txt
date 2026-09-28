@@ -1,0 +1,36 @@
+▶ Incident Engine & Event Ingestion Tests
+  ✔ normalizes heterogeneous raw events correctly (1.792166ms)
+  ✔ enforces PRD §19 10-state incident lifecycle and rejects illegal transitions (0.421541ms)
+  ✔ correlates temporal signals from deployment to alert into single incident (0.569708ms)
+✔ Incident Engine & Event Ingestion Tests (3.55325ms)
+[ProductionScopedServiceAccountProvider] Loaded scoped SA credentials for 'sre-executor' on cluster https://aks-aisre-prod-40jt7j4a.hcp.centralindia.azmk8s.io:443
+[ExecutionService] Initialized in LIVE mode with sre-executor role (workerId: worker-9904-50cecc91).
+▶ Remediation, Policy Engine, Execution & Verification Tests
+  ✔ enforces policy engine risk rules and approval gates (1.0255ms)
+  ✔ rejects unauthorized approval attempts and allows SRE approval (4.792542ms)
+  ✖ executes approved action with idempotency protection and verifies recovery (3.897875ms)
+  ✔ manages evidence objects and exports verifiable evidence bundles (0.788667ms)
+✖ Remediation, Policy Engine, Execution & Verification Tests (11.107708ms)
+ℹ tests 7
+ℹ suites 2
+ℹ pass 6
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4283.460958
+
+✖ failing tests:
+
+test at tests/unit/remediation.test.js:109:3
+✖ executes approved action with idempotency protection and verifies recovery (3.897875ms)
+  Error: Tenant mismatch: access to incident ef9c19e0-1f3a-4881-8b94-04aef697677f forbidden
+      at IncidentRepository.transitionState (file:///Users/ahad/EU%20SAAS/ai-sre-commander/services/incident-engine/dist/repository.js:180:25)
+      at ExecutionService.performExecution (file:///Users/ahad/EU%20SAAS/ai-sre-commander/services/execution-service/dist/index.js:179:33)
+      at async TestContext.<anonymous> (file:///Users/ahad/EU%20SAAS/ai-sre-commander/tests/unit/remediation.test.js:149:24)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Suite.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    code: 'TENANT_FORBIDDEN'
+  }
+
+Command failed: node --env-file=.env --test tests/unit/incident-engine.test.js tests/unit/remediation.test.js tests/unit/security-primitives.test.js tests/unit/governance.test.js

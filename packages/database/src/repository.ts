@@ -6,7 +6,9 @@ import {
   type IncidentSeverity,
   type NormalizedEvent,
   type EvidenceObject,
-  type RemediationProposal
+  type RemediationProposal,
+  type TenantContext,
+  asError
 } from '@ai-sre/event-schema';
 import { createHash, randomUUID } from 'node:crypto';
 
@@ -320,6 +322,9 @@ export class PrismaIncidentRepository {
           computedRisk,
           modelRisk: (proposal as any).modelRisk || proposal.risk,
           proposalHash: (proposal as any).proposalHash || proposalHash,
+          snapshotHash: (proposal as any).snapshotHash || (proposal as any).proposalHash || proposalHash,
+          policyVersion: (proposal as any).policyVersion || 'v2.1-deterministic',
+          evidenceSetHash: (proposal as any).evidenceSetHash || null,
           status: proposal.status || 'PROPOSED',
           idempotencyKey: proposal.idempotencyKey,
           expectedImpact: proposal.expectedImpact,
@@ -353,8 +358,10 @@ export class PrismaIncidentRepository {
       }).catch(() => {});
 
       return { isDuplicate: false, id: created.id };
-    } catch (error: any) {
-      if (error.code === 'P2002' || error.message?.includes('idempotencyKey')) {
+    } catch (error: unknown) {
+      const err = asError(error);
+      const code = (error as any)?.code;
+      if (code === 'P2002' || err.message.includes('idempotencyKey')) {
         return { isDuplicate: true, id: proposal.id };
       }
       throw error;
@@ -368,12 +375,17 @@ export class PrismaIncidentRepository {
     parameters: Record<string, any>;
     computedRisk: string;
     proposalHash?: string;
+    snapshotHash?: string;
+    policyVersion?: string;
+    evidenceSetHash?: string;
     tenantId?: string;
     expiresInSeconds?: number;
     expiresAt?: Date;
   }): Promise<any> {
     const id = randomUUID();
     const idempotencyKey = randomUUID();
+    const expiresInSeconds = data.expiresInSeconds || 900;
+    const expiresAt = data.expiresAt || new Date(Date.now() + expiresInSeconds * 1000);
     const proposal: any = {
       id,
       incidentId: data.incidentId,
@@ -389,8 +401,11 @@ export class PrismaIncidentRepository {
       proposedBy: 'ai',
       idempotencyKey,
       proposalHash: data.proposalHash,
-      expiresInSeconds: data.expiresInSeconds,
-      expiresAt: data.expiresAt,
+      snapshotHash: data.snapshotHash || data.proposalHash,
+      policyVersion: data.policyVersion || 'v2.1-deterministic',
+      evidenceSetHash: data.evidenceSetHash,
+      expiresInSeconds,
+      expiresAt,
       status: 'PROPOSED'
     };
     await this.recordProposal(proposal, data.tenantId);
@@ -409,16 +424,44 @@ export class PrismaIncidentRepository {
     });
   }
 
-  public async getProposal(proposalId: string): Promise<any | null> {
+  public async getProposal(
+    ctxOrId: TenantContext | string,
+    optionalProposalId?: string
+  ): Promise<any | null> {
+    const isDual = optionalProposalId !== undefined;
+    const proposalId = isDual ? optionalProposalId : (ctxOrId as string);
+    const tenantId = isDual
+      ? (typeof ctxOrId === 'string' ? ctxOrId : ctxOrId.tenantId)
+      : undefined;
+
     const modern = await this.prisma.remediationProposal.findUnique({
       where: { id: proposalId },
       include: { approvals: true, executions: true }
     });
-    if (modern) return modern;
 
-    return this.prisma.remediationRecord.findUnique({
+    if (modern) {
+      if (tenantId && modern.tenantId && modern.tenantId !== tenantId) {
+        const err = new Error(`Access denied: Proposal ${proposalId} belongs to different tenant`);
+        (err as any).code = 'TENANT_FORBIDDEN';
+        throw err;
+      }
+      return modern;
+    }
+
+    const legacy = await this.prisma.remediationRecord.findUnique({
       where: { id: proposalId }
     });
+
+    if (legacy) {
+      if (tenantId && (legacy as any).tenantId && (legacy as any).tenantId !== tenantId) {
+        const err = new Error(`Access denied: Proposal ${proposalId} belongs to different tenant`);
+        (err as any).code = 'TENANT_FORBIDDEN';
+        throw err;
+      }
+      return legacy;
+    }
+
+    return null;
   }
 
   public async getProposals(incidentId: string): Promise<any[]> {
@@ -533,7 +576,13 @@ export class PrismaIncidentRepository {
           role: approval.role,
           justificationHash,
           justification: approval.justification,
-          proposalHash: approval.proposalHash
+          proposalHash: approval.proposalHash,
+          snapshotHash: (approval as any).snapshotHash || approval.proposalHash,
+          deploymentUid: (approval as any).deploymentUid,
+          resourceVersion: (approval as any).resourceVersion,
+          targetReplicaSetUid: (approval as any).targetReplicaSetUid,
+          targetTemplateHash: (approval as any).targetTemplateHash,
+          expiresAt: proposal.expiresAt
         }
       });
 
@@ -638,8 +687,10 @@ export class PrismaIncidentRepository {
 
         return { execution: existing, isNewClaim: false };
       }, { maxWait: 15000, timeout: 15000 });
-    } catch (err: any) {
-      if (err.code === 'P2002' || err.message?.includes('Unique constraint failed') || err.code === 'P2034' || err.code === 'P2028') {
+    } catch (err: unknown) {
+      const error = asError(err);
+      const code = (err as any)?.code;
+      if (code === 'P2002' || error.message.includes('Unique constraint failed') || code === 'P2034' || code === 'P2028') {
         const existing = await this.prisma.execution.findUnique({
           where: { idempotencyKey: data.idempotencyKey }
         });
@@ -659,8 +710,16 @@ export class PrismaIncidentRepository {
   }
 
   public async updateExecution(
-    executionId: string,
-    data: {
+    ctxOrId: TenantContext | string,
+    executionIdOrData: string | {
+      status?: string;
+      desiredStateHash?: string;
+      observedStateHash?: string;
+      externalRequestId?: string;
+      errorCode?: string;
+      errorDetails?: any;
+    },
+    optionalData?: {
       status?: string;
       desiredStateHash?: string;
       observedStateHash?: string;
@@ -669,6 +728,24 @@ export class PrismaIncidentRepository {
       errorDetails?: any;
     }
   ): Promise<any> {
+    const isCtxMode = optionalData !== undefined;
+    const executionId = isCtxMode ? (executionIdOrData as string) : (ctxOrId as string);
+    const data = isCtxMode ? optionalData : (executionIdOrData as any);
+    const tenantId = isCtxMode
+      ? (typeof ctxOrId === 'string' ? ctxOrId : ctxOrId.tenantId)
+      : undefined;
+
+    if (tenantId) {
+      const existing = await this.prisma.execution.findUnique({
+        where: { id: executionId }
+      });
+      if (existing && existing.tenantId !== tenantId) {
+        const err = new Error(`Access denied: Execution ${executionId} belongs to different tenant`);
+        (err as any).code = 'TENANT_FORBIDDEN';
+        throw err;
+      }
+    }
+
     return this.prisma.execution.update({
       where: { id: executionId },
       data: {
@@ -678,11 +755,30 @@ export class PrismaIncidentRepository {
     });
   }
 
-  public async getExecution(executionId: string): Promise<any | null> {
-    return this.prisma.execution.findUnique({
+  public async getExecution(
+    ctxOrId: TenantContext | string,
+    optionalExecutionId?: string
+  ): Promise<any | null> {
+    const isDual = optionalExecutionId !== undefined;
+    const executionId = isDual ? optionalExecutionId : (ctxOrId as string);
+    const tenantId = isDual
+      ? (typeof ctxOrId === 'string' ? ctxOrId : ctxOrId.tenantId)
+      : undefined;
+
+    const execution = await this.prisma.execution.findUnique({
       where: { id: executionId },
       include: { verificationRuns: true }
     });
+
+    if (!execution) return null;
+
+    if (tenantId && execution.tenantId !== tenantId) {
+      const err = new Error(`Access denied: Execution ${executionId} belongs to different tenant`);
+      (err as any).code = 'TENANT_FORBIDDEN';
+      throw err;
+    }
+
+    return execution;
   }
 
   public async recordVerificationRun(data: {

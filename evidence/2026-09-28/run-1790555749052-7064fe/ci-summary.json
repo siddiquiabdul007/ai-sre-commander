@@ -1,0 +1,34 @@
+{
+  "runId": "run-1790555749052-7064fe",
+  "commit": "5d1e1ace21414bd9bdfe272b0cb380360c855511",
+  "branch": "main",
+  "startedAt": "2026-09-28T00:35:49.052Z",
+  "completedAt": "2026-09-28T00:36:40.286Z",
+  "gates": {
+    "lint": {
+      "success": true,
+      "durationMs": 3436
+    },
+    "residualSafety": {
+      "success": true,
+      "durationMs": 9566
+    },
+    "unitTests": {
+      "success": true,
+      "durationMs": 25490
+    },
+    "concurrencyTests": {
+      "success": true,
+      "durationMs": 8013
+    },
+    "securityTests": {
+      "success": true,
+      "durationMs": 153
+    },
+    "integrationTests": {
+      "success": true,
+      "durationMs": 1587
+    }
+  },
+  "allGatesPassed": true
+}

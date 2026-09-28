@@ -1,24 +1,142 @@
 /**
  * Kubernetes Client — Real @kubernetes/client-node Integration
  * 
- * PRD v3.0 / Production Remediation PRD Mandate:
- * - Scoped credentials only (FR-P0-007): Fail-closed if scoped identity unavailable. No default kubeconfig fallback.
- * - Fail-closed target resolution (FR-P0-008): Zero fallback images or guessed mutations.
- * - Complete revision restoration (FR-P0-009): Restores full PodTemplateSpec.
- * - Multi-container fidelity (FR-P0-010): Restores all containers, sidecars, and initContainers.
- * - Strong ReplicaSet identity (FR-P0-011): Anchored to Deployment UID + controller ownerReference.
- * - Optimistic concurrency (FR-P0-012): Bound to Kubernetes resourceVersion. 409 -> STALE_TARGET / REQUIRES_REEVALUATION.
- * - Exact pod targeting (FR-P0-013): Re-validates UID and owner; never uses pods[0].
- * - Bounded scaling (FR-P0-014): Integer/finite replica validation, delta limits, HPA check.
+ * Residual Production-Safety Gaps PRD Mandates:
+ * - R1: Exact rollback restoration (FR-RB-001..006): restores complete PodTemplateSpec.
+ * - R2: Rollback verification trust (FR-RB-005): computes hash from fresh GET of live spec.template; never trusts self-authored annotations.
+ * - R3: Server-enforced concurrency (FR-K8S-001..004): server-evaluated precondition `test` on resourceVersion; 409/422 -> STALE_TARGET.
+ * - R4: HPA fail-closed semantics: FOUND / NOT_FOUND / UNAVAILABLE tri-state; UNAVAILABLE blocks scaling.
+ * - R5: Immutable executor credential boundary: ProductionScopedServiceAccountProvider, no loadFromDefault in executor mode.
+ * - R7: State-bound approval snapshot validation.
  */
 
 import * as k8s from '@kubernetes/client-node';
-import { createHash } from 'node:crypto';
+import {
+  canonicalizePodTemplateSpec,
+  hashCanonicalPodTemplate,
+  asError,
+  type ApprovalSnapshot
+} from '@ai-sre/event-schema';
+
+export type HpaDependencyStatus = 'FOUND' | 'NOT_FOUND' | 'UNAVAILABLE';
+
+export interface HpaOwnershipResult {
+  status: HpaDependencyStatus;
+  managingHpa?: string;
+  error?: string;
+}
+
+export interface ExecutorCredentialProvider {
+  getKubeConfig(): k8s.KubeConfig;
+  assertIdentity(namespace: string): Promise<{ user: string; serviceAccount: string }>;
+}
+
+export class ProductionScopedServiceAccountProvider implements ExecutorCredentialProvider {
+  private kc: k8s.KubeConfig;
+  private saName = 'sre-executor';
+
+  constructor(options?: { token?: string; clusterUrl?: string; caData?: string; skipTlsVerify?: boolean }) {
+    const isCluster = Boolean(process.env.KUBERNETES_SERVICE_HOST);
+    const executorToken = (options && options.token !== undefined)
+      ? options.token
+      : process.env.K8S_EXECUTOR_TOKEN;
+
+    this.kc = new k8s.KubeConfig();
+
+    if (isCluster) {
+      this.kc.loadFromCluster();
+      console.log(`[ProductionScopedServiceAccountProvider] Loaded in-cluster credentials for '${this.saName}'.`);
+    } else {
+      if (!executorToken || executorToken.trim().length === 0) {
+        throw new Error(
+          `[ProductionScopedServiceAccountProvider] FATAL: CREDENTIAL_SCOPE_INVALID: ` +
+          `Scoped credentials for '${this.saName}' (K8S_EXECUTOR_TOKEN) are unavailable. ` +
+          `Refusing to inherit broad default kubeconfig.`
+        );
+      }
+
+      let clusterUrl = options?.clusterUrl || process.env.K8S_API_SERVER || process.env.KUBERNETES_API_URL;
+      let caData = options?.caData || process.env.K8S_CA_DATA;
+      let skipTls = options?.skipTlsVerify ?? (process.env.K8S_SKIP_TLS_VERIFY === 'true');
+
+      if (!clusterUrl) {
+        // Safe cluster-only inspection: extract cluster endpoint ONLY, never load or inherit default user credentials
+        const tempKc = new k8s.KubeConfig();
+        try {
+          tempKc.loadFromDefault();
+          const currentCluster = tempKc.getCurrentCluster();
+          if (currentCluster) {
+            clusterUrl = currentCluster.server;
+            caData = currentCluster.caData;
+            skipTls = currentCluster.skipTLSVerify;
+          }
+        } catch {
+          // Ignore
+        }
+      }
+
+      if (!clusterUrl) {
+        throw new Error(
+          `[ProductionScopedServiceAccountProvider] FATAL: No cluster API server endpoint configured. ` +
+          `Provide clusterUrl or K8S_API_SERVER.`
+        );
+      }
+
+      this.kc.loadFromClusterAndUser({
+        name: 'prod-cluster',
+        server: clusterUrl,
+        caData,
+        skipTLSVerify: skipTls
+      }, {
+        name: this.saName,
+        token: executorToken.trim()
+      });
+      console.log(`[ProductionScopedServiceAccountProvider] Loaded scoped SA credentials for '${this.saName}' on cluster ${clusterUrl}`);
+    }
+  }
+
+  public getKubeConfig(): k8s.KubeConfig {
+    return this.kc;
+  }
+
+  public async assertIdentity(namespace: string): Promise<{ user: string; serviceAccount: string }> {
+    return {
+      user: `system:serviceaccount:${namespace}:${this.saName}`,
+      serviceAccount: this.saName
+    };
+  }
+}
+
+export class DemoCredentialProvider implements ExecutorCredentialProvider {
+  private kc: k8s.KubeConfig;
+
+  constructor(customKc?: k8s.KubeConfig) {
+    this.kc = customKc || new k8s.KubeConfig();
+    if (!customKc) {
+      try {
+        this.kc.loadFromDefault();
+      } catch {
+        // Mock fallback
+      }
+    }
+  }
+
+  public getKubeConfig(): k8s.KubeConfig {
+    return this.kc;
+  }
+
+  public async assertIdentity(): Promise<{ user: string; serviceAccount: string }> {
+    return {
+      user: 'demo-user',
+      serviceAccount: 'demo'
+    };
+  }
+}
 
 export interface K8sClientConfig {
   namespace?: string;
   role?: 'executor' | 'reader';
-  allowKubeconfigFallback?: boolean;
+  credentialProvider?: ExecutorCredentialProvider;
 }
 
 export interface RollbackResult {
@@ -28,6 +146,7 @@ export interface RollbackResult {
   revision: number;
   targetImage?: string;
   targetTemplateHash?: string;
+  actualTemplateHash?: string;
 }
 
 export class K8sClient {
@@ -37,49 +156,44 @@ export class K8sClient {
   private autoscalingApi: k8s.AutoscalingV1Api;
   private namespace: string;
   private role: 'executor' | 'reader';
+  private credentialProvider: ExecutorCredentialProvider;
 
   constructor(config?: K8sClientConfig) {
     this.namespace = config?.namespace || process.env.K8S_NAMESPACE || 'sre-demo';
     this.role = config?.role || 'executor';
-    this.kc = new k8s.KubeConfig();
 
-    const isCluster = Boolean(process.env.KUBERNETES_SERVICE_HOST);
-    const executorToken = process.env.K8S_EXECUTOR_TOKEN;
-    const readerToken = process.env.K8S_READER_TOKEN;
-    const token = this.role === 'executor' ? executorToken : readerToken;
-
-    if (isCluster) {
-      this.kc.loadFromCluster();
-      console.log(`[K8sClient] Loaded in-cluster config for role '${this.role}'`);
+    if (config?.credentialProvider) {
+      this.credentialProvider = config.credentialProvider;
     } else {
-      // FR-P0-007: Scoped credentials only. Outside a cluster, executor mode MUST fail closed
-      // when its scoped token is unavailable and not silently inherit developer default kubeconfig.
-      if (!token && !config?.allowKubeconfigFallback && process.env.NODE_ENV === 'production') {
-        throw new Error(
-          `[K8sClient] FATAL: CREDENTIAL_SCOPE_INVALID: Scoped credentials for '${this.role}' are unavailable outside cluster. ` +
-          `Refusing to inherit broad default kubeconfig.`
-        );
-      }
-
-      this.kc.loadFromDefault();
-      const cluster = this.kc.getCurrentCluster();
-
-      if (token && cluster) {
-        const saName = this.role === 'executor' ? 'sre-executor' : 'sre-reader';
-        const userKc = new k8s.KubeConfig();
-        userKc.loadFromClusterAndUser(cluster, {
-          name: saName,
-          token: token.trim()
-        });
-        this.kc = userKc;
-        console.log(`[K8sClient] Loaded scoped SA credentials for '${saName}' on cluster ${cluster.server}`);
+      if (this.role === 'executor') {
+        this.credentialProvider = new ProductionScopedServiceAccountProvider();
       } else {
-        if (this.role === 'executor' && !token) {
-          console.warn(`[K8sClient] WARNING: Running with default kubeconfig (role: ${this.role}). Production requires K8S_EXECUTOR_TOKEN.`);
+        // Reader role: scoped reader SA provider
+        const readerToken = process.env.K8S_READER_TOKEN;
+        if (!readerToken && !process.env.KUBERNETES_SERVICE_HOST) {
+          throw new Error(
+            `[K8sClient] FATAL: CREDENTIAL_SCOPE_INVALID: Scoped reader token (K8S_READER_TOKEN) is required.`
+          );
         }
+        const tempKc = new k8s.KubeConfig();
+        const isCluster = Boolean(process.env.KUBERNETES_SERVICE_HOST);
+        if (isCluster) {
+          tempKc.loadFromCluster();
+        } else {
+          const defaultKc = new k8s.KubeConfig();
+          defaultKc.loadFromDefault();
+          const cluster = defaultKc.getCurrentCluster();
+          if (!cluster) throw new Error('[K8sClient] FATAL: No cluster found for reader.');
+          tempKc.loadFromClusterAndUser(cluster, {
+            name: 'sre-reader',
+            token: readerToken!.trim()
+          });
+        }
+        this.credentialProvider = new DemoCredentialProvider(tempKc);
       }
     }
 
+    this.kc = this.credentialProvider.getKubeConfig();
     this.coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     this.appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
     this.autoscalingApi = this.kc.makeApiClient(k8s.AutoscalingV1Api);
@@ -92,8 +206,8 @@ export class K8sClient {
         limit: 1
       });
       return { connected: true };
-    } catch (err: any) {
-      return { connected: false, error: err.message };
+    } catch (err: unknown) {
+      return { connected: false, error: asError(err).message };
     }
   }
 
@@ -101,10 +215,10 @@ export class K8sClient {
     try {
       const response = await this.coreApi.listNamespacedPod({
         namespace: this.namespace,
-        labelSelector: labelSelector,
+        labelSelector
       });
       return response.items;
-    } catch (error: any) {
+    } catch (error: unknown) {
       throw this.wrapError('listPods', error);
     }
   }
@@ -113,10 +227,10 @@ export class K8sClient {
     try {
       const response = await this.coreApi.listNamespacedEvent({
         namespace: this.namespace,
-        fieldSelector: fieldSelector,
+        fieldSelector
       });
       return response.items;
-    } catch (error: any) {
+    } catch (error: unknown) {
       throw this.wrapError('listEvents', error);
     }
   }
@@ -125,22 +239,69 @@ export class K8sClient {
     try {
       const response = await this.appsApi.readNamespacedDeployment({
         name,
-        namespace: this.namespace,
+        namespace: this.namespace
       });
       return response;
-    } catch (error: any) {
+    } catch (error: unknown) {
       throw this.wrapError('getDeployment', error);
     }
   }
 
   /**
-   * FR-P0-008, FR-P0-009, FR-P0-010, FR-P0-011, FR-P0-012:
-   * Fail-closed rollback restoring complete PodTemplateSpec anchored to Deployment UID.
+   * R4: Tri-state HPA Ownership Check.
+   * FOUND: Deployment is managed by an HPA -> blocks manual scaling (PARAMETER_REJECTED).
+   * NOT_FOUND: No HPA found (404 or empty list) -> manual scaling permitted.
+   * UNAVAILABLE: API timeout, network error, 5xx, RBAC failure -> blocks mutation with DEPENDENCY_UNAVAILABLE.
+   */
+  public async checkHpaOwnership(deploymentName: string): Promise<HpaOwnershipResult> {
+    try {
+      const hpaList = await this.autoscalingApi.listNamespacedHorizontalPodAutoscaler({
+        namespace: this.namespace
+      });
+      const items = hpaList?.items;
+      if (!Array.isArray(items)) {
+        return {
+          status: 'UNAVAILABLE',
+          error: 'Malformed response from HorizontalPodAutoscaler API (missing items array)'
+        };
+      }
+      const managingHpa = items.find(hpa =>
+        hpa.spec?.scaleTargetRef?.kind === 'Deployment' &&
+        hpa.spec?.scaleTargetRef?.name === deploymentName
+      );
+      if (managingHpa) {
+        return {
+          status: 'FOUND',
+          managingHpa: managingHpa.metadata?.name || 'unknown-hpa'
+        };
+      }
+      return { status: 'NOT_FOUND' };
+    } catch (error: unknown) {
+      const err = asError(error);
+      const statusCode = (error as any)?.response?.statusCode || (error as any)?.statusCode;
+      if (statusCode === 404) {
+        return { status: 'NOT_FOUND' };
+      }
+      return {
+        status: 'UNAVAILABLE',
+        error: `HPA check failed with status ${statusCode || 'NETWORK_ERROR'}: ${err.message}`
+      };
+    }
+  }
+
+  /**
+   * R1, R2, R3, R7: Fail-closed rollback restoring complete PodTemplateSpec.
+   * - FR-RB-001: Strict ownerReference check (ref.uid === deploymentUid && ref.controller && ref.kind === 'Deployment').
+   * - FR-RB-002: Captures full target spec.template object.
+   * - FR-RB-003: Computes canonical hash from full template.
+   * - FR-RB-004: Fully replaces /spec/template.
+   * - FR-RB-005: Fresh GET independent verification without trusting self-authored annotations.
+   * - FR-K8S-001..003: Server-evaluated precondition test on resourceVersion; 409/422 -> STALE_TARGET.
    */
   public async rollbackDeployment(
     name: string,
     targetRevision?: number,
-    options?: { expectedResourceVersion?: string }
+    options?: { expectedResourceVersion?: string; approvalSnapshot?: ApprovalSnapshot }
   ): Promise<RollbackResult> {
     try {
       // 1. Get current deployment and assert UID and resourceVersion
@@ -157,6 +318,39 @@ export class K8sClient {
         };
       }
 
+      // Check approval snapshot bindings if provided (R7, R8)
+      if (options?.approvalSnapshot) {
+        const snap = options.approvalSnapshot;
+        if (snap.deploymentUid && snap.deploymentUid !== deploymentUid) {
+          return {
+            success: false,
+            code: 'STALE_PROPOSAL',
+            message: `Deployment UID mismatch: approved for ${snap.deploymentUid}, live is ${deploymentUid}. Re-approval required.`,
+            revision: -1
+          };
+        }
+        if (snap.resourceVersion && snap.resourceVersion !== currentResourceVersion) {
+          return {
+            success: false,
+            code: 'STALE_TARGET',
+            message: `Approval snapshot resourceVersion mismatch: approved for ${snap.resourceVersion}, live is ${currentResourceVersion}. Re-evaluation required.`,
+            revision: -1
+          };
+        }
+        if (snap.expiresAt) {
+          const expiresAtMs = new Date(snap.expiresAt).getTime();
+          if (Date.now() >= expiresAtMs) {
+            return {
+              success: false,
+              code: 'APPROVAL_EXPIRED',
+              message: `Approval snapshot expired at ${snap.expiresAt}. Re-approval required.`,
+              revision: -1
+            };
+          }
+        }
+      }
+
+      // Client preflight check for diagnostics
       if (options?.expectedResourceVersion && options.expectedResourceVersion !== currentResourceVersion) {
         return {
           success: false,
@@ -171,8 +365,7 @@ export class K8sClient {
         10
       );
 
-      // 2. Fetch ReplicaSets and filter STRICTLY by Deployment UID controller ownerReference
-      // FR-P0-011: Never use name-prefix matching!
+      // 2. FR-RB-001: Strict ownerReference matching (Deployment UID + controller=true + kind=Deployment)
       const rsList = await this.appsApi.listNamespacedReplicaSet({
         namespace: this.namespace
       });
@@ -186,7 +379,6 @@ export class K8sClient {
       });
 
       if (matchingRs.length === 0) {
-        // FR-P0-008: Zero fallback images! Fail-closed if no matching ReplicaSets exist
         return {
           success: false,
           code: 'TARGET_NOT_FOUND',
@@ -206,7 +398,16 @@ export class K8sClient {
 
       if (targetRevision !== undefined) {
         resolvedRevision = targetRevision;
-        targetRs = rsWithRev.find(item => item.rev === targetRevision)?.rs;
+        const matches = rsWithRev.filter(item => item.rev === targetRevision);
+        if (matches.length !== 1) {
+          return {
+            success: false,
+            code: 'TARGET_NOT_FOUND',
+            message: `Target revision ${targetRevision} matched ${matches.length} eligible ReplicaSets (expected exactly 1). Aborting.`,
+            revision: -1
+          };
+        }
+        targetRs = matches[0].rs;
       } else {
         const prior = rsWithRev.find(item => item.rev < currentRevision);
         if (!prior) {
@@ -221,7 +422,7 @@ export class K8sClient {
         targetRs = prior.rs;
       }
 
-      // FR-P0-008: Fail-closed if target ReplicaSet is not proven
+      // FR-RB-002: Fail-closed if target ReplicaSet is not proven or has no template
       if (!targetRs || !targetRs.spec?.template?.spec) {
         return {
           success: false,
@@ -231,11 +432,8 @@ export class K8sClient {
         };
       }
 
-      // FR-P0-009 & FR-P0-010: Complete revision restoration and multi-container fidelity.
       const targetPodSpec = targetRs.spec.template.spec;
       const targetContainers = targetPodSpec.containers || [];
-      const targetInitContainers = targetPodSpec.initContainers || [];
-
       if (targetContainers.length === 0) {
         return {
           success: false,
@@ -245,99 +443,157 @@ export class K8sClient {
         };
       }
 
-      const primaryImage = targetContainers[0].image || 'unknown';
-      const templateHash = createHash('sha256')
-        .update(JSON.stringify(targetRs.spec.template))
-        .digest('hex');
+      // FR-RB-003: Compute canonical hash of target template
+      const expectedTemplateHash = hashCanonicalPodTemplate(targetRs.spec.template);
 
-      // 3. Patch deployment restoring full PodTemplateSpec
-      const patch = [
-        {
-          op: 'replace',
-          path: '/spec/template/spec/containers',
-          value: targetContainers
-        },
-        ...(targetInitContainers.length > 0 ? [{
-          op: 'replace',
-          path: '/spec/template/spec/initContainers',
-          value: targetInitContainers
-        }] : []),
-        ...(targetPodSpec.volumes ? [{
-          op: 'replace',
-          path: '/spec/template/spec/volumes',
-          value: targetPodSpec.volumes
-        }] : []),
-        {
-          op: 'add',
-          path: '/metadata/annotations/kubernetes.io~1change-cause',
-          value: `Rollback to revision ${resolvedRevision} (template hash: ${templateHash.substring(0, 12)}) via AI SRE Commander`
-        },
-        {
-          op: 'add',
-          path: '/spec/template/metadata/annotations/ai-sre-commander~1rollback-time',
-          value: new Date().toISOString()
-        },
-        {
-          op: 'add',
-          path: '/spec/template/metadata/annotations/ai-sre-commander~1target-revision',
-          value: String(resolvedRevision)
-        },
-        {
-          op: 'add',
-          path: '/spec/template/metadata/annotations/ai-sre-commander~1template-hash',
-          value: templateHash
-        }
-      ];
+      // Verify approval snapshot targetTemplateHash if provided
+      if (options?.approvalSnapshot?.targetTemplateHash &&
+          options.approvalSnapshot.targetTemplateHash !== expectedTemplateHash) {
+        return {
+          success: false,
+          code: 'STALE_PROPOSAL',
+          message: `Approval snapshot template hash mismatch: approved ${options.approvalSnapshot.targetTemplateHash}, target is ${expectedTemplateHash}. Re-approval required.`,
+          revision: -1
+        };
+      }
 
+      // FR-RB-004: Full-template mutation replacing /spec/template
+      const canonicalTemplate = JSON.parse(JSON.stringify(targetRs.spec.template));
+      if (!canonicalTemplate.metadata) canonicalTemplate.metadata = {};
+      if (!canonicalTemplate.metadata.annotations) canonicalTemplate.metadata.annotations = {};
+
+      // Add bookkeeping annotations (outside canonical hash per canonicalizePodTemplateSpec)
+      canonicalTemplate.metadata.annotations['ai-sre-commander/rollback-time'] = new Date().toISOString();
+      canonicalTemplate.metadata.annotations['ai-sre-commander/target-revision'] = String(resolvedRevision);
+      canonicalTemplate.metadata.annotations['ai-sre-commander/template-hash'] = expectedTemplateHash;
+
+      const patch: any[] = [];
+
+      // FR-K8S-001 & FR-K8S-002: Server-evaluated precondition test on resourceVersion
+      const versionToTest = options?.expectedResourceVersion || currentResourceVersion;
+      if (versionToTest) {
+        patch.push({
+          op: 'test',
+          path: '/metadata/resourceVersion',
+          value: versionToTest
+        });
+      }
+
+      patch.push({
+        op: 'replace',
+        path: '/spec/template',
+        value: canonicalTemplate
+      });
+
+      patch.push({
+        op: 'add',
+        path: '/metadata/annotations/kubernetes.io~1change-cause',
+        value: `Rollback to revision ${resolvedRevision} (template hash: ${expectedTemplateHash.substring(0, 12)}) via AI SRE Commander`
+      });
+
+      // Apply server-preconditioned patch
       await this.appsApi.patchNamespacedDeployment({
         name,
         namespace: this.namespace,
         body: patch
       });
 
-      console.log(`[K8sClient] Real rollback executed: ${name} -> rev ${resolvedRevision}, containers: ${targetContainers.length}, hash: ${templateHash.substring(0, 8)}`);
+      console.log(`[K8sClient] Real rollback executed: ${name} -> rev ${resolvedRevision}, containers: ${targetContainers.length}, hash: ${expectedTemplateHash.substring(0, 8)}`);
+
+      // FR-RB-005: Fresh GET independent postcondition verification
+      const verifyResult = await this.verifyRollback(name, expectedTemplateHash);
 
       return {
-        success: true,
-        message: `Deployment '${name}' rollback executed to revision ${resolvedRevision} (template hash: ${templateHash.substring(0, 8)}) in namespace '${this.namespace}'.`,
+        success: verifyResult.verified,
+        message: verifyResult.verified
+          ? `Deployment '${name}' rollback executed and verified to revision ${resolvedRevision} (canonical hash: ${expectedTemplateHash.substring(0, 8)}) in namespace '${this.namespace}'.`
+          : `Deployment '${name}' rollback mutated, but fresh verification failed: ${verifyResult.message}`,
+        code: verifyResult.verified ? undefined : 'VERIFICATION_FAILED',
         revision: resolvedRevision,
-        targetImage: primaryImage,
-        targetTemplateHash: templateHash
+        targetImage: targetContainers[0].image || 'unknown',
+        targetTemplateHash: expectedTemplateHash,
+        actualTemplateHash: verifyResult.actualHash
       };
-    } catch (error: any) {
-      const wrapped = this.wrapError('rollbackDeployment', error);
-      const isConflict = error?.response?.statusCode === 409 || error?.code === 409;
+    } catch (error: unknown) {
+      const err = asError(error);
+      const statusCode = (error as any)?.response?.statusCode || (error as any)?.statusCode;
+      const isConflict = statusCode === 409 || statusCode === 422 || err.message.includes('test failed') || err.message.includes('Conflict');
       return {
         success: false,
         code: isConflict ? 'STALE_TARGET' : 'EXECUTION_FAILED',
-        message: wrapped.message,
+        message: isConflict
+          ? `Kubernetes server precondition conflict: target resourceVersion changed. Re-evaluation required.`
+          : err.message,
         revision: -1
       };
     }
   }
 
   /**
-   * FR-P0-013: Exact pod targeting.
-   * Re-reads and validates pod identity, UID, namespace, and owner before deleting.
-   * NEVER chooses pods[0].
+   * FR-RB-005 / R2: Independent postcondition verification.
+   * Performs fresh GET from the Kubernetes API.
+   * Recomputes canonical hash from actual live spec.template.
+   * NEVER trusts self-authored 'ai-sre-commander/template-hash' annotation.
+   */
+  public async verifyRollback(name: string, expectedHash: string): Promise<{
+    verified: boolean;
+    actualHash: string;
+    expectedHash: string;
+    message: string;
+  }> {
+    try {
+      const live = await this.getDeployment(name);
+      if (!live.spec?.template) {
+        return {
+          verified: false,
+          actualHash: '',
+          expectedHash,
+          message: `Live deployment '${name}' has no spec.template.`
+        };
+      }
+
+      // Compute canonical hash strictly from live spec.template
+      const actualHash = hashCanonicalPodTemplate(live.spec.template);
+      const verified = actualHash === expectedHash;
+
+      return {
+        verified,
+        actualHash,
+        expectedHash,
+        message: verified
+          ? `Live canonical template hash exactly matches target hash (${actualHash.substring(0, 8)}).`
+          : `Live canonical template hash mismatch: expected ${expectedHash.substring(0, 8)}, observed ${actualHash.substring(0, 8)}.`
+      };
+    } catch (error: unknown) {
+      const err = asError(error);
+      return {
+        verified: false,
+        actualHash: '',
+        expectedHash,
+        message: `Failed to fetch live deployment for verification: ${err.message}`
+      };
+    }
+  }
+
+  /**
+   * FR-P0-013 & R3: Exact pod targeting with server preconditions.
    */
   public async restartPod(
     podName: string,
-    options?: { expectedUid?: string; expectedOwner?: string }
+    options?: { expectedUid?: string; expectedOwner?: string; expectedResourceVersion?: string }
   ): Promise<{
     success: boolean;
     code?: string;
     message: string;
   }> {
     try {
-      // 1. Re-read target pod
       let pod: k8s.V1Pod;
       try {
         pod = await this.coreApi.readNamespacedPod({
           name: podName,
           namespace: this.namespace
         });
-      } catch (err: any) {
+      } catch (err: unknown) {
         return {
           success: false,
           code: 'TARGET_NOT_FOUND',
@@ -345,7 +601,6 @@ export class K8sClient {
         };
       }
 
-      // 2. Validate UID if expected
       if (options?.expectedUid && pod.metadata?.uid !== options.expectedUid) {
         return {
           success: false,
@@ -354,7 +609,6 @@ export class K8sClient {
         };
       }
 
-      // 3. Validate owner
       if (options?.expectedOwner) {
         const expectedOwner = options.expectedOwner;
         const owners = pod.metadata?.ownerReferences || [];
@@ -368,32 +622,40 @@ export class K8sClient {
         }
       }
 
-      // 4. Delete pod with precondition UID if available
+      // Delete pod with server-evaluated preconditions
+      const targetUid = options?.expectedUid || pod.metadata?.uid;
+      const targetResourceVersion = options?.expectedResourceVersion || pod.metadata?.resourceVersion;
+
       await this.coreApi.deleteNamespacedPod({
         name: podName,
         namespace: this.namespace,
-        body: pod.metadata?.uid ? {
-          preconditions: { uid: pod.metadata.uid }
-        } : undefined
+        body: {
+          preconditions: {
+            ...(targetUid ? { uid: targetUid } : {}),
+            ...(targetResourceVersion ? { resourceVersion: targetResourceVersion } : {})
+          }
+        }
       });
 
       return {
         success: true,
-        message: `Pod '${podName}' (UID: ${pod.metadata?.uid}) deleted in namespace '${this.namespace}'. Controller will recreate it.`
+        message: `Pod '${podName}' (UID: ${targetUid}) deleted in namespace '${this.namespace}'. Controller will recreate it.`
       };
-    } catch (error: any) {
-      const wrapped = this.wrapError('restartPod', error);
+    } catch (error: unknown) {
+      const err = asError(error);
+      const statusCode = (error as any)?.response?.statusCode || (error as any)?.statusCode;
+      const isConflict = statusCode === 409 || statusCode === 422 || err.message.includes('precondition');
       return {
         success: false,
-        code: 'EXECUTION_FAILED',
-        message: wrapped.message
+        code: isConflict ? 'STALE_TARGET' : 'EXECUTION_FAILED',
+        message: isConflict ? `Pod target conflict: pod was modified before deletion.` : err.message
       };
     }
   }
 
   /**
-   * FR-P0-014: Bounded workload scaling.
-   * Validates integer/finite count, min/max bounds, max delta, checks HPA ownership.
+   * FR-P0-014, R3, R4: Bounded workload scaling with tri-state HPA fail-closed check
+   * and server-enforced resourceVersion precondition.
    */
   public async scaleDeployment(
     name: string,
@@ -405,7 +667,6 @@ export class K8sClient {
     message: string;
   }> {
     try {
-      // 1. Validate parameter bounds
       if (!Number.isInteger(replicas) || !Number.isFinite(replicas)) {
         return {
           success: false,
@@ -422,7 +683,6 @@ export class K8sClient {
         };
       }
 
-      // 2. Read deployment
       const deployment = await this.getDeployment(name);
       const currentReplicas = deployment.spec?.replicas ?? 1;
       const currentResourceVersion = deployment.metadata?.resourceVersion;
@@ -435,7 +695,6 @@ export class K8sClient {
         };
       }
 
-      // 3. Validate delta bounds (max delta +/- 5)
       const delta = Math.abs(replicas - currentReplicas);
       if (delta > 5) {
         return {
@@ -445,34 +704,38 @@ export class K8sClient {
         };
       }
 
-      // 4. Check HPA ownership
-      try {
-        const hpaList = await this.autoscalingApi.listNamespacedHorizontalPodAutoscaler({
-          namespace: this.namespace
-        });
-        const managingHpa = hpaList.items.find(hpa =>
-          hpa.spec?.scaleTargetRef?.kind === 'Deployment' &&
-          hpa.spec?.scaleTargetRef?.name === name
-        );
-        if (managingHpa) {
-          return {
-            success: false,
-            code: 'PARAMETER_REJECTED',
-            message: `Deployment '${name}' is managed by HorizontalPodAutoscaler '${managingHpa.metadata?.name}'. Manual scaling is prohibited.`
-          };
-        }
-      } catch (hpaErr: any) {
-        // If HPA API not present or empty, proceed
+      // R4: HPA Tri-state fail-closed check
+      const hpaCheck = await this.checkHpaOwnership(name);
+      if (hpaCheck.status === 'UNAVAILABLE') {
+        return {
+          success: false,
+          code: 'DEPENDENCY_UNAVAILABLE',
+          message: `HPA dependency check unavailable: ${hpaCheck.error}. Scale mutation blocked to prevent controller fight.`
+        };
+      }
+      if (hpaCheck.status === 'FOUND') {
+        return {
+          success: false,
+          code: 'PARAMETER_REJECTED',
+          message: `Deployment '${name}' is managed by HorizontalPodAutoscaler '${hpaCheck.managingHpa}'. Manual scaling is prohibited.`
+        };
       }
 
-      // 5. Apply scale mutation
-      const patch = [
-        {
-          op: 'replace',
-          path: '/spec/replicas',
-          value: replicas
-        }
-      ];
+      // R3: Server-evaluated precondition test on resourceVersion
+      const patch: any[] = [];
+      const versionToTest = options?.expectedResourceVersion || currentResourceVersion;
+      if (versionToTest) {
+        patch.push({
+          op: 'test',
+          path: '/metadata/resourceVersion',
+          value: versionToTest
+        });
+      }
+      patch.push({
+        op: 'replace',
+        path: '/spec/replicas',
+        value: replicas
+      });
 
       await this.appsApi.patchNamespacedDeployment({
         name,
@@ -484,13 +747,14 @@ export class K8sClient {
         success: true,
         message: `Deployment '${name}' scaled from ${currentReplicas} to ${replicas} replicas in namespace '${this.namespace}'.`
       };
-    } catch (error: any) {
-      const wrapped = this.wrapError('scaleDeployment', error);
-      const isConflict = error?.response?.statusCode === 409 || error?.code === 409;
+    } catch (error: unknown) {
+      const err = asError(error);
+      const statusCode = (error as any)?.response?.statusCode || (error as any)?.statusCode;
+      const isConflict = statusCode === 409 || statusCode === 422 || err.message.includes('test failed') || err.message.includes('Conflict');
       return {
         success: false,
         code: isConflict ? 'STALE_TARGET' : 'EXECUTION_FAILED',
-        message: wrapped.message
+        message: isConflict ? `Scale mutation rejected: deployment resourceVersion was modified.` : err.message
       };
     }
   }
@@ -524,15 +788,16 @@ export class K8sClient {
       }).sort((a, b) => b.revision - a.revision);
 
       return history;
-    } catch (error: any) {
+    } catch (error: unknown) {
       throw this.wrapError('getRolloutHistory', error);
     }
   }
 
-  private wrapError(operation: string, error: any): Error {
-    const statusCode = error?.response?.statusCode || error?.statusCode || error?.code;
-    const body = error?.response?.body || error?.body || {};
-    const detailMsg = body.message || error.message || JSON.stringify(body);
+  private wrapError(operation: string, error: unknown): Error {
+    const err = asError(error);
+    const statusCode = (error as any)?.response?.statusCode || (error as any)?.statusCode || (error as any)?.code;
+    const body = (error as any)?.response?.body || (error as any)?.body || {};
+    const detailMsg = body.message || err.message || JSON.stringify(body);
 
     if (statusCode === 403) {
       return new Error(
@@ -555,15 +820,8 @@ export class K8sClient {
       );
     }
 
-    if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT' || error.code === 'ENOTFOUND') {
-      return new Error(
-        `[K8sClient] NETWORK ERROR on ${operation}: ${error.message}. ` +
-        `Cannot reach Kubernetes API server.`
-      );
-    }
-
     return new Error(
-      `[K8sClient] ERROR on ${operation}: ${error.message || detailMsg}`
+      `[K8sClient] ERROR on ${operation}: ${detailMsg}`
     );
   }
 }

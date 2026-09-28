@@ -99,6 +99,9 @@ model RemediationProposal {
   computedRisk            String   // Canonical deterministic risk (LOW, MEDIUM, HIGH, CRITICAL)
   modelRisk               String?  // Advisory risk proposed by AI
   proposalHash            String   // Canonical proposal snapshot hash
+  snapshotHash            String?  // Complete infrastructure snapshot hash (R7)
+  policyVersion           String?  @default("1.0.0")
+  evidenceSetHash         String?  // Hash of evidence set at proposal time
   observedStateHash       String?  // Canonical hash of target K8s state when proposed
   observedResourceVersion String?  // Target K8s resourceVersion when proposed
   status                  String   // PROPOSED, PENDING_APPROVAL, APPROVED, REJECTED, EXECUTING, SUCCESS, FAILED, EXPIRED, STALE
@@ -124,18 +127,24 @@ model RemediationProposal {
 }
 
 model Approval {
-  id                String              @id @default(uuid())
-  proposalId        String
-  tenantId          String              @default("tenant-eu-default")
-  proposal          RemediationProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
-  approverSubject   String              // Unique approver identity
-  approverName      String?
-  approverEmail     String?
-  role              String              // Role exercised for approval
-  justificationHash String              // SHA-256 hash of justification
-  justification     String?
-  proposalHash      String              // Snapshot hash bound to this approval
-  approvedAt        DateTime            @default(now())
+  id                  String              @id @default(uuid())
+  proposalId          String
+  tenantId            String              @default("tenant-eu-default")
+  proposal            RemediationProposal @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+  approverSubject     String              // Unique approver identity
+  approverName        String?
+  approverEmail       String?
+  role                String              // Role exercised for approval
+  justificationHash   String              // SHA-256 hash of justification
+  justification       String?
+  proposalHash        String              // Snapshot hash bound to this approval
+  snapshotHash        String?             // Immutable approval snapshot hash (R7)
+  deploymentUid       String?             // Target deployment UID
+  resourceVersion     String?             // Target resourceVersion at approval
+  targetReplicaSetUid String?             // Target ReplicaSet UID
+  targetTemplateHash  String?             // Target PodTemplateSpec hash
+  expiresAt           DateTime?           // Immutable fixed proposal deadline (R8)
+  approvedAt          DateTime            @default(now())
 
   @@unique([proposalId, approverSubject])
   @@index([proposalId])
@@ -156,6 +165,7 @@ model Execution {
   leaseUntil        DateTime?
   desiredStateHash  String?
   observedStateHash String?
+  staleReason       String?             // Reason if marked STALE_TARGET / REEVALUATION_REQUIRED
   externalRequestId String?
   errorCode         String?
   errorDetails      Json?
@@ -171,18 +181,22 @@ model Execution {
 }
 
 model VerificationRun {
-  id           String     @id @default(uuid())
-  incidentId   String
-  executionId  String?
-  tenantId     String     @default("tenant-eu-default")
-  incident     Incident   @relation(fields: [incidentId], references: [id], onDelete: Cascade)
-  execution    Execution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
-  status       String     // OK, UNKNOWN, NOT_RECOVERED, VERIFIED
-  startTime    DateTime   @default(now())
-  endTime      DateTime?
-  evidenceJson Json?
-  summary      String
-  createdAt    DateTime   @default(now())
+  id             String     @id @default(uuid())
+  incidentId     String
+  executionId    String?
+  tenantId       String     @default("tenant-eu-default")
+  incident       Incident   @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  execution      Execution? @relation(fields: [executionId], references: [id], onDelete: SetNull)
+  status         String     // OK, UNKNOWN, NOT_RECOVERED, VERIFIED
+  result         String?    // VERIFIED, NOT_RECOVERED, UNKNOWN
+  probeStates    Json?      // Status of each individual probe (OK, UNAVAILABLE, INVALID)
+  evidenceHashes Json?      // SHA256 hashes of telemetry evidence evaluated
+  startTime      DateTime   @default(now())
+  endTime        DateTime?
+  completedAt    DateTime?
+  evidenceJson   Json?
+  summary        String
+  createdAt      DateTime   @default(now())
 
   @@index([incidentId])
   @@index([tenantId])
@@ -207,3 +221,16 @@ model AuditRecord {
 
   @@index([tenant, timestamp])
 }
+
+model EvidenceArtifact {
+  id           String   @id @default(uuid())
+  claimId      String
+  pathOrObject String
+  sha256       String
+  sourceCommit String
+  createdAt    DateTime @default(now())
+
+  @@index([claimId])
+  @@index([sourceCommit])
+}
+

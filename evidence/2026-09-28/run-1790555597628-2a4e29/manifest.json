@@ -1,0 +1,95 @@
+{
+  "manifestVersion": "1.0",
+  "runId": "run-1790555597628-2a4e29",
+  "sourceCommit": "5d1e1ace21414bd9bdfe272b0cb380360c855511",
+  "branch": "main",
+  "runner": "ahad",
+  "environment": {
+    "nodeVersion": "v26.3.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "clusterUid": "df63ea46-9e7e-47de-bd53-0ee98e9e0382",
+    "database": "HEALTHY"
+  },
+  "utcStart": "2026-09-28T00:33:17.628Z",
+  "utcEnd": "2026-09-28T00:33:54.277Z",
+  "claims": [
+    {
+      "claimId": "CLM-RB-01",
+      "description": "Complete PodTemplateSpec restored and independently verified",
+      "evidenceFile": "residual-safety-output.txt",
+      "testId": "AT-RB-01",
+      "status": "VERIFIED"
+    },
+    {
+      "claimId": "CLM-RB-02",
+      "description": "Fresh GET independent verification without trusting self-authored annotations",
+      "evidenceFile": "residual-safety-output.txt",
+      "testId": "AT-RB-02",
+      "status": "VERIFIED"
+    },
+    {
+      "claimId": "CLM-K8S-01",
+      "description": "Server-enforced Kubernetes concurrency preconditions",
+      "evidenceFile": "residual-safety-output.txt",
+      "testId": "AT-RB-03",
+      "status": "VERIFIED"
+    },
+    {
+      "claimId": "CLM-HPA-01",
+      "description": "HPA fail-closed tri-state dependency handling",
+      "evidenceFile": "residual-safety-output.txt",
+      "testId": "AT-SC-01",
+      "status": "VERIFIED"
+    },
+    {
+      "claimId": "CLM-CRED-01",
+      "description": "Immutable executor credential provider refusing default kubeconfig",
+      "evidenceFile": "residual-safety-output.txt",
+      "testId": "AT-CRED-01",
+      "status": "VERIFIED"
+    },
+    {
+      "claimId": "CLM-TEN-01",
+      "description": "Mandatory tenant isolation on repository boundaries",
+      "evidenceFile": "residual-safety-output.txt",
+      "testId": "AT-TEN-01",
+      "status": "VERIFIED"
+    },
+    {
+      "claimId": "CLM-APP-01",
+      "description": "Approval snapshot bound to infrastructure identity and resourceVersion",
+      "evidenceFile": "residual-safety-output.txt",
+      "testId": "AT-APP-01",
+      "status": "VERIFIED"
+    },
+    {
+      "claimId": "CLM-APP-02",
+      "description": "Fixed non-extendable proposal-level approval TTL",
+      "evidenceFile": "residual-safety-output.txt",
+      "testId": "AT-APP-02",
+      "status": "VERIFIED"
+    },
+    {
+      "claimId": "CLM-TYPE-01",
+      "description": "Trust-boundary type safety gate in CI",
+      "evidenceFile": "residual-safety-output.txt",
+      "testId": "AT-TYPE-01",
+      "status": "VERIFIED"
+    },
+    {
+      "claimId": "CLM-EVID-01",
+      "description": "Machine-readable evidence bundle integrity",
+      "evidenceFile": "residual-safety-output.txt",
+      "testId": "AT-EVID-01",
+      "status": "VERIFIED"
+    },
+    {
+      "claimId": "CLM-DR-01",
+      "description": "Reconciliation recovers ambiguous execution state before closure",
+      "evidenceFile": "residual-safety-output.txt",
+      "testId": "AT-DR-01",
+      "status": "VERIFIED"
+    }
+  ]
+}

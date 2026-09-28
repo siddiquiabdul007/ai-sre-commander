@@ -21,7 +21,8 @@
     "test:e2e": "node tests/e2e/golden-incident-live.test.js",
     "drill:live": "node --env-file=.env scripts/run-live-azure-drill.js",
     "dev:api": "npm --workspace=apps/api run dev",
-    "dev:web": "npm --workspace=apps/web run dev",
+    "test:residual": "node --env-file=.env --test tests/integration/residual-safety.test.js",
+    "evidence:bundle": "node --env-file=.env scripts/generate-evidence-bundle.js",
     "lint": "./scripts/lint.sh"
   },
   "keywords": [

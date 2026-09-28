@@ -1,0 +1,8 @@
+{
+  "deployment": "checkout-api",
+  "namespace": "sre-demo",
+  "targetRevision": 34,
+  "verifiedStatus": "VERIFIED",
+  "canonicalTemplateHashEqualsTarget": true,
+  "recordedAt": "2026-09-28T00:35:52.035Z"
+}

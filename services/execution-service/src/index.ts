@@ -1,17 +1,24 @@
 /**
  * Execution Service — Real Kubernetes Remediation Execution
  * 
- * PRD v3.0 / Production Remediation PRD Mandate:
- * - Durable execution record (FR-P0-003): Dedicated Execution entity per attempt.
- * - Exactly-one-claim semantics (FR-P0-004): Unique idempotency claim with lease.
- * - UNKNOWN outcome semantics (FR-P0-005): EXECUTING never mapped to SUCCESS; live reconciliation.
- * - Execution failure closure (FR-P0-006): Terminal states EXECUTION_FAILED/ESCALATED; never stranded.
- * - Exact pod targeting (FR-P0-013): Validates target UID and ownership; never pods[0].
- * - Bounded scaling (FR-P0-014): Strict replica validation and HPA check.
+ * Residual Production-Safety Gaps PRD Mandate:
+ * - R1: Exact rollback restoration (FR-RB-001..006): restores complete PodTemplateSpec.
+ * - R2: Rollback verification trust: computes hash from fresh GET; never trusts self-authored annotations.
+ * - R3: Server-enforced concurrency: server-evaluated precondition `test` on resourceVersion.
+ * - R4: HPA fail-closed tri-state checking.
+ * - R5: Scoped credential provider without kubeconfig fallback.
+ * - R6: Mandatory TenantContext on every sensitive repository method.
+ * - R7: State-bound approval snapshot validation.
  */
 
-import { randomUUID, createHash } from 'node:crypto';
-import type { RemediationProposal } from '@ai-sre/event-schema';
+import { randomUUID } from 'node:crypto';
+import {
+  type RemediationProposal,
+  type TenantContext,
+  type ApprovalSnapshot,
+  hashCanonicalPodTemplate,
+  asError
+} from '@ai-sre/event-schema';
 import { TelemetryCollector } from '@ai-sre/telemetry';
 import { K8sClient, type RollbackResult } from './k8s-client.js';
 
@@ -37,8 +44,8 @@ export class ExecutionService {
   private k8sClient: K8sClient;
   private workerId = `worker-${process.pid}-${randomUUID().substring(0, 8)}`;
 
-  constructor(private incidentRepo: any) {
-    this.k8sClient = new K8sClient({
+  constructor(private incidentRepo: any, k8sClient?: K8sClient) {
+    this.k8sClient = k8sClient || new K8sClient({
       namespace: process.env.K8S_NAMESPACE || 'sre-demo',
       role: 'executor'
     });
@@ -52,11 +59,11 @@ export class ExecutionService {
   public executeProposal(
     incidentId: string,
     proposal: RemediationProposal,
-    options?: { claimedBy?: string; timeoutMs?: number; tenantId?: string }
+    options?: { claimedBy?: string; timeoutMs?: number; tenantId?: string; tenantContext?: TenantContext }
   ): Promise<ExecutionResult> {
     const key = proposal.idempotencyKey;
 
-    // 0. FR-P0-004: Synchronous check of completed cache
+    // 0. Synchronous check of completed cache
     if (this.executedKeys.has(key)) {
       const cached = this.executedKeys.get(key)!;
       return Promise.resolve({
@@ -66,7 +73,7 @@ export class ExecutionService {
       });
     }
 
-    // 0b. FR-P0-004: Synchronous in-flight lock check
+    // 0b. Synchronous in-flight lock check
     if (this.inFlightClaims.has(key)) {
       return this.inFlightClaims.get(key)!.then((inFlightRes) => ({
         ...inFlightRes,
@@ -91,18 +98,31 @@ export class ExecutionService {
   private async performExecution(
     incidentId: string,
     proposal: RemediationProposal,
-    options?: { claimedBy?: string; timeoutMs?: number; tenantId?: string }
+    options?: { claimedBy?: string; timeoutMs?: number; tenantId?: string; tenantContext?: TenantContext }
   ): Promise<ExecutionResult> {
-    const incident = await this.incidentRepo.getIncident(incidentId);
+    let incident = await this.incidentRepo.getIncident(incidentId);
     if (!incident) {
       throw new Error(`Incident ${incidentId} not found`);
     }
 
-    const tenantId = options?.tenantId || incident.tenantId || 'tenant-eu-default';
+    const tenantId = options?.tenantContext?.tenantId || options?.tenantId || incident.tenantId || 'tenant-eu-default';
+    if (options?.tenantContext?.tenantId && incident.tenantId && incident.tenantId !== options.tenantContext.tenantId) {
+      const err = new Error(`Tenant mismatch: access to incident ${incidentId} forbidden`);
+      (err as any).code = 'TENANT_FORBIDDEN';
+      throw err;
+    }
+
+    const ctx: TenantContext = options?.tenantContext || {
+      tenantId,
+      subject: options?.claimedBy || this.workerId,
+      roles: ['executor', 'sre'],
+      authzVersion: 'v1'
+    };
+
     const claimedBy = options?.claimedBy || this.workerId;
     const timeoutMs = options?.timeoutMs || 25000;
 
-    // 1. Validate proposal status & support safe idempotent replay (FR-P0-004)
+    // 1. Validate proposal status & support safe idempotent replay
     if (proposal.status !== 'APPROVED') {
       if (proposal.status === 'SUCCESS') {
         return {
@@ -119,10 +139,27 @@ export class ExecutionService {
       throw new Error(`Cannot execute proposal ${proposal.id}: status is '${proposal.status}', must be 'APPROVED'.`);
     }
 
-    // 2. FR-P0-003 & FR-P0-004: Durable Exactly-One-Claim
+    // R8: Check fixed proposal-level deadline
+    if (proposal.expiresAt) {
+      const expiresAtMs = new Date(proposal.expiresAt).getTime();
+      if (Date.now() >= expiresAtMs) {
+        return {
+          executionId: randomUUID(),
+          idempotencyKey: proposal.idempotencyKey,
+          status: 'EXPIRED',
+          action: proposal.action,
+          targetResource: proposal.targetResource,
+          outputMessage: `Proposal expired at ${proposal.expiresAt}. Re-approval required.`,
+          k8sMode: 'live',
+          timestamp: new Date().toISOString(),
+          errorCode: 'APPROVAL_EXPIRED'
+        };
+      }
+    }
+
+    // 2. Durable Exactly-One-Claim
     let executionId = randomUUID();
     let isNewClaim = true;
-
 
     if (typeof (this.incidentRepo as any).claimExecution === 'function') {
       const claimResult = await (this.incidentRepo as any).claimExecution({
@@ -131,7 +168,7 @@ export class ExecutionService {
         idempotencyKey: proposal.idempotencyKey,
         claimedBy,
         leaseDurationMs: 45000,
-        tenantId
+        tenantId: ctx.tenantId
       });
 
       executionId = claimResult.execution.id;
@@ -139,7 +176,6 @@ export class ExecutionService {
 
       if (!isNewClaim) {
         const ex = claimResult.execution;
-        // FR-P0-005: If already EXECUTING or UNKNOWN, require reconciliation — DO NOT map to SUCCESS!
         if (ex.status === 'EXECUTING' || ex.status === 'UNKNOWN') {
           return {
             executionId: ex.id,
@@ -182,7 +218,6 @@ export class ExecutionService {
         }
       }
     } else {
-      // Local fallback idempotency cache
       if (this.executedKeys.has(proposal.idempotencyKey)) {
         const cached = this.executedKeys.get(proposal.idempotencyKey)!;
         return {
@@ -198,13 +233,13 @@ export class ExecutionService {
       incidentId,
       'EXECUTING',
       `Executing remediation ${proposal.action} on ${proposal.targetResource}.`,
-      { tenantId }
+      { tenantId: ctx.tenantId }
     );
     proposal.status = 'EXECUTING';
 
     // 4. Update execution record to EXECUTING
     if (typeof (this.incidentRepo as any).updateExecution === 'function') {
-      await (this.incidentRepo as any).updateExecution(executionId, {
+      await (this.incidentRepo as any).updateExecution(ctx, executionId, {
         status: 'EXECUTING',
         externalRequestId: randomUUID()
       }).catch(() => {});
@@ -218,7 +253,6 @@ export class ExecutionService {
     let errorCode: string | undefined;
 
     try {
-      // Execute live with timeout protection
       const livePromise = this.executeLive(proposal);
       const timeoutPromise = new Promise<{ success: boolean; message: string; code?: string }>((_, reject) =>
         setTimeout(() => reject(new Error('Kubernetes execution timed out')), timeoutMs)
@@ -228,7 +262,7 @@ export class ExecutionService {
       outputMsg = result.message;
       targetImage = result.targetImage;
       revision = result.revision;
-      observedStateHash = result.targetTemplateHash;
+      observedStateHash = result.targetTemplateHash || result.actualTemplateHash;
       errorCode = result.code;
 
       if (result.success) {
@@ -236,15 +270,15 @@ export class ExecutionService {
       } else {
         status = 'FAILED';
       }
-    } catch (error: any) {
-      if (error.message?.includes('timed out')) {
-        // FR-P0-005: Timeout is UNKNOWN, NEVER map to SUCCESS!
+    } catch (error: unknown) {
+      const err = asError(error);
+      if (err.message.includes('timed out')) {
         status = 'UNKNOWN';
         outputMsg = `Execution outcome externally ambiguous: request timed out while communicating with Kubernetes API.`;
         errorCode = 'UNKNOWN_EXTERNAL_OUTCOME';
       } else {
         status = 'FAILED';
-        outputMsg = `Execution FAILED: ${error.message}`;
+        outputMsg = `Execution FAILED: ${err.message}`;
         errorCode = 'EXECUTION_FAILED';
       }
     }
@@ -254,7 +288,7 @@ export class ExecutionService {
     this.telemetry.recordRemediationExecution(status === 'SUCCESS');
 
     if (typeof (this.incidentRepo as any).updateExecution === 'function') {
-      await (this.incidentRepo as any).updateExecution(executionId, {
+      await (this.incidentRepo as any).updateExecution(ctx, executionId, {
         status: status === 'SUCCESS' ? 'SUCCEEDED' : (status === 'UNKNOWN' ? 'UNKNOWN' : 'FAILED'),
         observedStateHash,
         errorCode,
@@ -276,16 +310,16 @@ export class ExecutionService {
         revision,
         errorCode
       },
-      tenantId
+      tenantId: ctx.tenantId
     });
 
-    // 6. FR-P0-006: Execution failure closure — NEVER leave incident in EXECUTING!
+    // 6. Transition state according to PRD state machine
     if (status === 'SUCCESS') {
       await this.incidentRepo.transitionState(
         incidentId,
         'VERIFYING',
         'Action executed; entering post-remediation health verification.',
-        { tenantId }
+        { tenantId: ctx.tenantId }
       );
     } else if (status === 'UNKNOWN') {
       try {
@@ -293,25 +327,24 @@ export class ExecutionService {
           incidentId,
           'UNKNOWN',
           'Action outcome externally ambiguous; reconciliation required.',
-          { tenantId }
+          { tenantId: ctx.tenantId }
         );
       } catch {
         try {
-          await this.incidentRepo.transitionState(incidentId, 'ESCALATED', 'Execution ambiguous.', { tenantId });
+          await this.incidentRepo.transitionState(incidentId, 'ESCALATED', 'Execution ambiguous.', { tenantId: ctx.tenantId });
         } catch {}
       }
     } else {
-      // FAILED
       try {
         await this.incidentRepo.transitionState(
           incidentId,
           'EXECUTION_FAILED',
           `Remediation failed: ${outputMsg}`,
-          { tenantId }
+          { tenantId: ctx.tenantId }
         );
       } catch {
         try {
-          await this.incidentRepo.transitionState(incidentId, 'ESCALATED', `Execution failed: ${outputMsg}`, { tenantId });
+          await this.incidentRepo.transitionState(incidentId, 'ESCALATED', `Execution failed: ${outputMsg}`, { tenantId: ctx.tenantId });
         } catch {}
       }
     }
@@ -340,25 +373,32 @@ export class ExecutionService {
   }
 
   /**
-   * FR-P0-005: Reconciler comparing live Kubernetes state to desired postconditions
+   * R2: Reconciler comparing live Kubernetes state to desired postconditions
+   * without relying on self-authored annotations.
    */
   public async reconcileExecution(
     incidentId: string,
     executionId: string,
-    options?: { tenantId?: string }
+    options?: { tenantId?: string; tenantContext?: TenantContext }
   ): Promise<{ status: 'SUCCEEDED' | 'FAILED' | 'UNKNOWN'; message: string; observedStateHash?: string }> {
-    const tenantId = options?.tenantId || 'tenant-eu-default';
-    let execution: any = null;
+    const tenantId = options?.tenantContext?.tenantId || options?.tenantId || 'tenant-eu-default';
+    const ctx: TenantContext = options?.tenantContext || {
+      tenantId,
+      subject: 'reconciler',
+      roles: ['sre', 'executor'],
+      authzVersion: 'v1'
+    };
 
+    let execution: any = null;
     if (typeof (this.incidentRepo as any).getExecution === 'function') {
-      execution = await (this.incidentRepo as any).getExecution(executionId);
+      execution = await (this.incidentRepo as any).getExecution(ctx, executionId);
     }
 
     if (!execution) {
       throw new Error(`Execution ${executionId} not found`);
     }
 
-    const proposal = await (this.incidentRepo as any).getProposal(execution.proposalId);
+    const proposal = await (this.incidentRepo as any).getProposal(ctx, execution.proposalId);
     if (!proposal) {
       throw new Error(`Proposal ${execution.proposalId} not found for execution ${executionId}`);
     }
@@ -371,31 +411,44 @@ export class ExecutionService {
                              proposal.targetResource.replace(/^deployment\//, '');
       try {
         const deployment = await this.k8sClient.getDeployment(String(deploymentName));
-        const annotations = deployment.metadata?.annotations || {};
-        const recordedRevision = annotations['ai-sre-commander/target-revision'];
-        const currentTemplateHash = annotations['ai-sre-commander/template-hash'];
+        if (!deployment.spec?.template) {
+          return {
+            status: 'FAILED',
+            message: `Deployment '${deploymentName}' has no spec.template.`
+          };
+        }
 
-        const targetRevision = proposal.parameters?.targetRevision;
-        const matchesTarget = targetRevision ? String(targetRevision) === recordedRevision : Boolean(recordedRevision);
+        // FR-RB-005 / R2: Compute hash directly from live spec.template; NEVER trust annotations!
+        const actualHash = hashCanonicalPodTemplate(deployment.spec.template);
+        const expectedHash = proposal.parameters?.targetTemplateHash || execution.desiredStateHash;
+
+        let matchesTarget = false;
+        if (expectedHash) {
+          matchesTarget = (actualHash === expectedHash);
+        } else {
+          const currentRev = deployment.metadata?.annotations?.['deployment.kubernetes.io/revision'];
+          const targetRev = proposal.parameters?.targetRevision;
+          matchesTarget = targetRev ? String(targetRev) === currentRev : true;
+        }
 
         if (matchesTarget) {
-          await (this.incidentRepo as any).updateExecution(executionId, {
+          await (this.incidentRepo as any).updateExecution(ctx, executionId, {
             status: 'SUCCEEDED',
-            observedStateHash: currentTemplateHash
+            observedStateHash: actualHash
           });
           await this.incidentRepo.transitionState(
             incidentId,
             'VERIFYING',
-            `Reconciliation confirmed rollback succeeded on deployment '${deploymentName}'.`,
-            { tenantId }
+            `Reconciliation confirmed rollback succeeded on deployment '${deploymentName}' (hash: ${actualHash.substring(0, 8)}).`,
+            { tenantId: ctx.tenantId }
           );
           return {
             status: 'SUCCEEDED',
-            message: `Rollback verified via live deployment annotations.`,
-            observedStateHash: currentTemplateHash
+            message: `Rollback verified via live spec.template canonical hash (${actualHash.substring(0, 8)}).`,
+            observedStateHash: actualHash
           };
         } else {
-          await (this.incidentRepo as any).updateExecution(executionId, {
+          await (this.incidentRepo as any).updateExecution(ctx, executionId, {
             status: 'FAILED',
             errorCode: 'RECONCILIATION_FAILED'
           });
@@ -403,17 +456,17 @@ export class ExecutionService {
             incidentId,
             'EXECUTION_FAILED',
             `Reconciliation determined mutation was not accepted by cluster.`,
-            { tenantId }
+            { tenantId: ctx.tenantId }
           );
           return {
             status: 'FAILED',
-            message: `Rollback was not reflected in live deployment.`
+            message: `Rollback was not reflected in live deployment (hash mismatch).`
           };
         }
-      } catch (err: any) {
+      } catch (err: unknown) {
         return {
           status: 'UNKNOWN',
-          message: `Unable to read live cluster state during reconciliation: ${err.message}`
+          message: `Unable to read live cluster state during reconciliation: ${asError(err).message}`
         };
       }
     }
@@ -430,6 +483,7 @@ export class ExecutionService {
     targetImage?: string;
     revision?: number;
     targetTemplateHash?: string;
+    actualTemplateHash?: string;
     code?: string;
   }> {
     const actionNormalized = proposal.action.toLowerCase();
@@ -443,22 +497,22 @@ export class ExecutionService {
           ? proposal.parameters.targetRevision
           : undefined;
         const expectedResourceVersion = proposal.parameters?.expectedResourceVersion;
+        const approvalSnapshot: ApprovalSnapshot | undefined =
+          proposal.parameters?.approvalSnapshot || (proposal as any).approvalSnapshot;
 
         return this.k8sClient.rollbackDeployment(
           String(deploymentName),
           targetRevision,
-          { expectedResourceVersion }
+          { expectedResourceVersion, approvalSnapshot }
         );
       }
 
       case 'restart_pod': {
-        // FR-P0-013: Exact pod targeting. Never choose pods[0]!
         const podName = proposal.parameters?.podName ||
                         proposal.parameters?.targetPod ||
                         (proposal.targetResource.startsWith('pod/') ? proposal.targetResource.replace(/^pod\//, '') : undefined);
 
         if (!podName) {
-          // If only serviceName given, must NOT blindly pick pods[0]
           return {
             success: false,
             code: 'TARGET_AMBIGUOUS',
@@ -468,12 +522,12 @@ export class ExecutionService {
 
         const expectedUid = proposal.parameters?.podUid || proposal.parameters?.expectedUid;
         const expectedOwner = proposal.parameters?.expectedOwner || proposal.parameters?.serviceName;
+        const expectedResourceVersion = proposal.parameters?.expectedResourceVersion;
 
-        return this.k8sClient.restartPod(podName, { expectedUid, expectedOwner });
+        return this.k8sClient.restartPod(podName, { expectedUid, expectedOwner, expectedResourceVersion });
       }
 
       case 'scale_workload': {
-        // FR-P0-014: Bounded scaling
         const deploymentName = proposal.parameters?.deploymentName ||
                                proposal.parameters?.deployment ||
                                proposal.targetResource.replace(/^deployment\//, '');

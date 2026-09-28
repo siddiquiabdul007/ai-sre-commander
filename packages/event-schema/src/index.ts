@@ -87,11 +87,13 @@ export const CanonicalErrorCodeEnum = z.enum([
   'UNSUPPORTED_ACTION',
   'PARAMETER_REJECTED',
   'CREDENTIAL_SCOPE_INVALID',
+  'DEPENDENCY_UNAVAILABLE',
   'LEASE_LOST',
   'UNKNOWN_EXTERNAL_OUTCOME',
   'VERIFICATION_UNKNOWN',
   'TENANT_FORBIDDEN',
-  'RECONCILIATION_REQUIRED'
+  'RECONCILIATION_REQUIRED',
+  'UNKNOWN'
 ]);
 export type CanonicalErrorCode = z.infer<typeof CanonicalErrorCodeEnum>;
 
@@ -151,7 +153,13 @@ export const RemediationProposalSchema = z.object({
   createdAt: z.string().datetime(),
   approvedBy: z.string().optional(),
   approvedAt: z.string().datetime().optional(),
-  rejectionReason: z.string().optional()
+  rejectionReason: z.string().optional(),
+  proposalHash: z.string().optional(),
+  snapshotHash: z.string().optional(),
+  policyVersion: z.string().optional(),
+  evidenceSetHash: z.string().optional(),
+  expiresAt: z.string().optional(),
+  approvalSnapshot: z.any().optional()
 });
 export type RemediationProposal = z.infer<typeof RemediationProposalSchema>;
 
@@ -309,3 +317,100 @@ export class IncidentStateMachine {
     }
   }
 }
+
+/**
+ * FR-P1-007 / R6: Strongly typed immutable TenantContext for repository methods.
+ */
+export interface TenantContext {
+  tenantId: string;
+  subject: string;
+  roles: readonly string[];
+  authzVersion: string;
+}
+
+/**
+ * FR-P1-005 / R7: State-bound approval snapshot contract.
+ */
+export interface ApprovalSnapshot {
+  proposalHash: string;
+  deploymentUid?: string;
+  resourceVersion?: string;
+  targetReplicaSetUid?: string;
+  targetRevision?: number;
+  targetTemplateHash?: string;
+  evidenceSetHash?: string;
+  policyVersion: string;
+  approvedAt: string;
+  expiresAt: string;
+}
+
+/**
+ * R9: Narrowing helper to safely extract Error from unknown.
+ */
+export function asError(error: unknown): Error {
+  if (error instanceof Error) return error;
+  if (typeof error === 'string') return new Error(error);
+  if (error && typeof error === 'object' && 'message' in error && typeof (error as any).message === 'string') {
+    const err = new Error((error as any).message);
+    Object.assign(err, error);
+    return err;
+  }
+  return new Error(String(error));
+}
+
+/**
+ * R9: Explicit typed interfaces at system boundaries.
+ */
+export interface AuthContext {
+  tenantId: string;
+  subject: string;
+  roles: readonly string[];
+  authzVersion: string;
+}
+
+export interface IncidentRepositoryContract {
+  createIncident(data: any): Promise<Incident>;
+  getIncident(id: string, tenantId?: string): Promise<Incident | null>;
+  listIncidents(tenantId?: string): Promise<Incident[]>;
+  transitionState(id: string, targetState: IncidentState, reason: string, options?: { tenantId?: string; expectedVersion?: number }): Promise<Incident>;
+  addTimelineEntry(incidentId: string, entry: any): Promise<any>;
+}
+
+export interface ExecutionRepositoryContract {
+  claimExecution(data: {
+    proposalId: string;
+    incidentId: string;
+    idempotencyKey: string;
+    claimedBy: string;
+    leaseDurationMs?: number;
+    tenantId: string;
+  }): Promise<{ execution: any; isNewClaim: boolean; requiresReconciliation?: boolean }>;
+  getExecution(ctx: TenantContext | string, executionId: string): Promise<any | null>;
+  updateExecution(ctx: TenantContext | string, executionId: string, data: any): Promise<any>;
+}
+
+export interface ProposalRepositoryContract {
+  recordProposal(proposal: RemediationProposal, tenantId?: string): Promise<{ isDuplicate: boolean; id: string }>;
+  getProposal(ctx: TenantContext | string, proposalId: string): Promise<any | null>;
+  getProposals(incidentId: string, tenantId?: string): Promise<any[]>;
+  updateProposalStatus(ctx: TenantContext | string, proposalId: string, status: string): Promise<void>;
+}
+
+export interface ApprovalRepositoryContract {
+  addApproval(proposalIdOrPayload: any, approvalPayload?: any): Promise<{ approval: any; quorumSatisfied: boolean; distinctApprovers: number }>;
+}
+
+export interface EvidenceStoreContract {
+  recordEvidence(incidentId: string, evidence: EvidenceObject, tenantId?: string): Promise<void>;
+  getEvidenceForIncident(incidentId: string, tenantId?: string): Promise<EvidenceObject[]>;
+}
+
+export interface KubernetesMutationGateway {
+  getDeployment(name: string): Promise<any>;
+  rollbackDeployment(name: string, targetRevision?: number, options?: { expectedResourceVersion?: string; approvalSnapshot?: ApprovalSnapshot }): Promise<any>;
+  scaleDeployment(name: string, replicas: number, options?: { expectedResourceVersion?: string }): Promise<any>;
+  restartPod(podName: string, options?: { expectedUid?: string; expectedOwner?: string }): Promise<any>;
+}
+
+export * from './template-canonicalizer.js';
+

@@ -22,5 +22,12 @@ if ! grep -rn "PrismaIncidentRepository" services/incident-engine/src/repository
   exit 1
 fi
 
-echo "✓ All static safety invariant checks passed."
+echo "=== [CI Gate 4] Trust Boundary Type-Safety Gate (R9) ==="
+# Check that no 'catch (.*: any)' exists in execution-service, policy-engine, remediation-engine
+if grep -rnE "catch\s*\([a-zA-Z0-9_]+\s*:\s*any\)" services/execution-service/src/ services/policy-engine/src/ services/remediation-engine/src/; then
+  echo "FAIL: AT-TYPE-01: Prohibited 'catch (error: any)' found at service boundary! Use 'catch (error: unknown)' + asError()."
+  exit 1
+fi
+
+echo "✓ All static safety invariant and trust boundary checks passed."
 echo "=== CI Quality Gates Successfully Completed ==="

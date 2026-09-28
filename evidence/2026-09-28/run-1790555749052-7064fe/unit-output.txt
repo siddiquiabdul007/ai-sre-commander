@@ -1,0 +1,23 @@
+▶ Incident Engine & Event Ingestion Tests
+  ✔ normalizes heterogeneous raw events correctly (1.639209ms)
+  ✔ enforces PRD §19 10-state incident lifecycle and rejects illegal transitions (0.3885ms)
+  ✔ correlates temporal signals from deployment to alert into single incident (0.321917ms)
+✔ Incident Engine & Event Ingestion Tests (2.918167ms)
+[ProductionScopedServiceAccountProvider] Loaded scoped SA credentials for 'sre-executor' on cluster https://aks-aisre-prod-40jt7j4a.hcp.centralindia.azmk8s.io:443
+[ExecutionService] Initialized in LIVE mode with sre-executor role (workerId: worker-10161-5d013df7).
+▶ Remediation, Policy Engine, Execution & Verification Tests
+  ✔ enforces policy engine risk rules and approval gates (1.030625ms)
+  ✔ rejects unauthorized approval attempts and allows SRE approval (4.611584ms)
+[K8sClient] Real rollback executed: checkout-api -> rev 36, containers: 1, hash: 25d8f729
+[VerificationAgent] Starting fail-closed recovery verification for 'checkout-api' in 'sre-demo'...
+  ✔ executes approved action with idempotency protection and verifies recovery (17982.058625ms)
+  ✔ manages evidence objects and exports verifiable evidence bundles (2.343667ms)
+✔ Remediation, Policy Engine, Execution & Verification Tests (17990.878958ms)
+ℹ tests 7
+ℹ suites 2
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 25421.269792
