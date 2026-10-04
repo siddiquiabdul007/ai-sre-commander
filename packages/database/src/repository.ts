@@ -999,7 +999,32 @@ export class PrismaIncidentRepository {
       createdAt: raw.createdAt.toISOString(),
       updatedAt: raw.updatedAt.toISOString(),
       resolvedAt: raw.resolvedAt ? raw.resolvedAt.toISOString() : undefined,
-      hypotheses: [],
+      hypotheses: (() => {
+        const aiTimeline = raw.timeline?.find((t: any) => t.type === 'AI_HYPOTHESIS' && !t.title?.includes('Failed'));
+        if (!aiTimeline) return [];
+        const d = aiTimeline.data as any;
+        if (d?.hypotheses && Array.isArray(d.hypotheses) && d.hypotheses.length > 0) {
+          return d.hypotheses;
+        }
+        return [{
+          id: d?.hypothesisId || 'hyp-1',
+          title: aiTimeline.title.replace(/^AI Finding:\s*/, ''),
+          confidence: d?.confidence ?? 92,
+          description: aiTimeline.description
+        }];
+      })(),
+      leadingHypothesis: (() => {
+        const aiTimeline = raw.timeline?.find((t: any) => t.type === 'AI_HYPOTHESIS' && !t.title?.includes('Failed'));
+        if (!aiTimeline) return undefined;
+        const d = aiTimeline.data as any;
+        if (d?.leadingHypothesis) return d.leadingHypothesis;
+        return {
+          id: d?.hypothesisId || 'hyp-1',
+          title: aiTimeline.title.replace(/^AI Finding:\s*/, ''),
+          confidence: d?.confidence ?? 92,
+          description: aiTimeline.description
+        };
+      })(),
       remediationProposals: proposalsList.map((p: any) => ({
         id: p.id,
         incidentId: p.incidentId,

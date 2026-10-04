@@ -641,30 +641,30 @@ export class ApiServer {
 
     // ── 6. Interactive Flagship Demonstration Scenario trigger (PRD §38) ─
     this.app.post('/api/demo/trigger-flagship', async () => {
-      // Step 1: Ingest Deployment v1.1.0
-      const deployEvent = EventNormalizer.normalizeGitHub({
-        deployment: { ref: 'v1.1.0', sha: 'e7a4b12399ff', environment: 'production' },
-        repository: { name: 'checkout-api' }
+      // Step 1: Create a fresh live incident
+      const inc = await this.repo.createIncident({
+        title: 'CRITICAL: High Error Rate 5xx Spike on checkout-api (Azure AKS)',
+        service: 'checkout-api',
+        severity: 'SEV-1',
+        environment: 'production',
+        cluster: 'aks-aisre-prod',
+        namespace: 'sre-demo'
       });
-      const c1 = await this.correlation.correlate(deployEvent);
-      const incId = c1.incident.id;
+      const incId = inc.id;
 
-      // Step 2: Pod OOMKilled
-      const k8sEvent = EventNormalizer.normalizeKubernetes({
-        reason: 'OOMKilled',
-        involvedObject: { kind: 'Pod', name: 'checkout-api-5f585985bf-ng58r', labels: { app: 'checkout-api' } },
-        message: 'Container limit 512Mi exceeded'
+      // Step 2: Record baseline events on timeline
+      await this.repo.addTimelineEntry(incId, {
+        type: 'DEPLOYMENT',
+        title: 'Deployment v1.1.0 (commit e7a4b12399ff) in production',
+        description: 'Target checkout-api updated with new payment buffer caching logic.'
       });
-      await this.correlation.correlate(k8sEvent);
-
-      // Step 3: Prometheus Alert firing
-      const promAlert = EventNormalizer.normalizePrometheus({
-        labels: { alertname: 'HighErrorRate5xx', service: 'checkout-api', severity: 'critical' },
-        annotations: { summary: 'HTTP 500 error rate spiked to 6.8%' }
+      await this.repo.addTimelineEntry(incId, {
+        type: 'ALERT',
+        title: 'Prometheus Alert: HighErrorRate5xx',
+        description: 'HTTP 500 error rate spiked to 6.8% on checkout-api in sre-demo.'
       });
-      await this.correlation.correlate(promAlert);
 
-      // Step 4: Run AI Investigation
+      // Step 3: Run AI Investigation with Google Gemini
       const inv = await this.orchestrator.runInvestigation(incId);
       for (const ev of inv.evidence) {
         await this.repo.addEvidence(incId, ev);

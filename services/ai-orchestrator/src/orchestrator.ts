@@ -110,10 +110,24 @@ export class AIOrchestrator {
       throw new Error(`[AIOrchestrator] Multi-agent investigation failed: ${llmError.message}`);
     }
 
-    // 4. Update incident state machine and attach findings
     incident.leadingHypothesis = leadingHypothesis;
     incident.hypotheses = hypotheses;
     incident.remediationProposals = [remediationProposal];
+
+    if ((this.incidentRepo as any).createRemediationProposal) {
+      try {
+        await (this.incidentRepo as any).createRemediationProposal({
+          incidentId,
+          action: remediationProposal.action || 'rollback_deployment',
+          targetResource: remediationProposal.targetResource || 'deployment/checkout-api',
+          parameters: remediationProposal.parameters || { targetRevision: 2 },
+          computedRisk: remediationProposal.risk || 'HIGH',
+          tenantId: incident.tenantId
+        });
+      } catch (err) {
+        console.warn('[AIOrchestrator] Non-fatal: failed to persist remediation proposal:', err);
+      }
+    }
 
     await this.incidentRepo.transitionState(
       incidentId,
@@ -134,7 +148,9 @@ export class AIOrchestrator {
         hypothesisId: leadingHypothesis.id,
         confidence: leadingHypothesis.confidence,
         llmModel: usedModel,
-        llmLatencyMs
+        llmLatencyMs,
+        hypotheses: hypotheses,
+        leadingHypothesis: leadingHypothesis
       }
     });
 
